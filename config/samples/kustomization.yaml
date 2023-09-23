@@ -1,0 +1,7 @@
+## Append samples of your project ##
+resources:
+- simple-cicd_v1alpha1_job.yaml
+- simple-cicd_v1alpha1_workflow.yaml
+- simple-cicd_v1alpha1_workflowwebhook.yaml
+- simple-cicd_v1alpha1_workflowwebhookrequest.yaml
+#+kubebuilder:scaffold:manifestskustomizesamples

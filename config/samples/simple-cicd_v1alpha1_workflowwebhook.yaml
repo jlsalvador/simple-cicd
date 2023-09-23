@@ -1,0 +1,16 @@
+apiVersion: simple-cicd.jlsalvador.online/v1alpha1
+kind: WorkflowWebhook
+metadata:
+  labels:
+    app.kubernetes.io/name: workflowwebhook
+    app.kubernetes.io/instance: workflowwebhook-sample
+    app.kubernetes.io/part-of: simple-cicd
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: simple-cicd
+  name: workflowwebhook-sample
+spec:
+  workflows:
+  - name: workflow-sample-hello
+    namespace: default
+  - name: workflow-sample-hi
+    namespace: default

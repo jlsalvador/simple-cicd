@@ -1,0 +1,162 @@
+apiVersion: simple-cicd.jlsalvador.online/v1alpha1
+kind: Workflow
+metadata:
+  labels:
+    app.kubernetes.io/name: workflow
+    app.kubernetes.io/instance: workflow-sample
+    app.kubernetes.io/part-of: simple-cicd
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: simple-cicd
+  name: workflow-sample-hello
+spec:
+  suspend: true
+  jobsToBeCloned:
+    - name: job-sample-hello
+      namespace: default
+  next:
+    - name: workflow-sample-random
+      namespace: default
+      # when: # when is optional, by default is "Always"
+---
+apiVersion: simple-cicd.jlsalvador.online/v1alpha1
+kind: Workflow
+metadata:
+  labels:
+    app.kubernetes.io/name: workflow
+    app.kubernetes.io/instance: workflow-sample
+    app.kubernetes.io/part-of: simple-cicd
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: simple-cicd
+  name: workflow-sample-hi
+spec:
+  suspend: true
+  jobsToBeCloned:
+    - name: job-sample-hi
+      namespace: default
+---
+apiVersion: simple-cicd.jlsalvador.online/v1alpha1
+kind: Workflow
+metadata:
+  labels:
+    app.kubernetes.io/name: workflow
+    app.kubernetes.io/instance: workflow-sample
+    app.kubernetes.io/part-of: simple-cicd
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: simple-cicd
+  name: workflow-sample-random
+spec:
+  suspend: true
+  jobsToBeCloned:
+    - namespace: default
+      name: job-sample-random-exit
+    - namespace: default
+      name: job-sample-random-exit
+  next:
+    - name: workflow-sample-all-ok
+      namespace: default
+      when: OnSuccess
+    - name: workflow-sample-all-bad
+      namespace: default
+      when: OnFailure
+    - name: workflow-sample-some-successes
+      namespace: default
+      when: OnAnySuccess
+    - name: workflow-sample-some-failures
+      namespace: default
+      when: OnAnyFailure
+---
+apiVersion: simple-cicd.jlsalvador.online/v1alpha1
+kind: Workflow
+metadata:
+  labels:
+    app.kubernetes.io/name: workflow
+    app.kubernetes.io/instance: workflow-sample
+    app.kubernetes.io/part-of: simple-cicd
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: simple-cicd
+  name: workflow-sample-all-ok
+spec:
+  suspend: true
+  jobsToBeCloned:
+    - namespace: default
+      name: job-sample-all-ok
+  next:
+    - namespace: default
+      name: workflow-sample-bye
+      when: Always
+---
+apiVersion: simple-cicd.jlsalvador.online/v1alpha1
+kind: Workflow
+metadata:
+  labels:
+    app.kubernetes.io/name: workflow
+    app.kubernetes.io/instance: workflow-sample
+    app.kubernetes.io/part-of: simple-cicd
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: simple-cicd
+  name: workflow-sample-all-bad
+spec:
+  suspend: true
+  jobsToBeCloned:
+    - namespace: default
+      name: job-sample-all-bad
+  next:
+    - namespace: default
+      name: workflow-sample-bye
+      when: Always
+---
+apiVersion: simple-cicd.jlsalvador.online/v1alpha1
+kind: Workflow
+metadata:
+  labels:
+    app.kubernetes.io/name: workflow
+    app.kubernetes.io/instance: workflow-sample
+    app.kubernetes.io/part-of: simple-cicd
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: simple-cicd
+  name: workflow-sample-some-successes
+spec:
+  suspend: true
+  jobsToBeCloned:
+    - namespace: default
+      name: job-sample-some-successes
+  next:
+    - namespace: default
+      name: workflow-sample-bye
+      when: Always
+---
+apiVersion: simple-cicd.jlsalvador.online/v1alpha1
+kind: Workflow
+metadata:
+  labels:
+    app.kubernetes.io/name: workflow
+    app.kubernetes.io/instance: workflow-sample
+    app.kubernetes.io/part-of: simple-cicd
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: simple-cicd
+  name: workflow-sample-some-failures
+spec:
+  suspend: true
+  jobsToBeCloned:
+    - namespace: default
+      name: job-sample-some-failures
+  next:
+    - namespace: default
+      name: workflow-sample-bye
+      when: Always
+---
+apiVersion: simple-cicd.jlsalvador.online/v1alpha1
+kind: Workflow
+metadata:
+  labels:
+    app.kubernetes.io/name: workflow
+    app.kubernetes.io/instance: workflow-sample
+    app.kubernetes.io/part-of: simple-cicd
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: simple-cicd
+  name: workflow-sample-bye
+spec:
+  suspend: true
+  jobsToBeCloned:
+    - namespace: default
+      name: job-sample-bye

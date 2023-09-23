@@ -1,0 +1,120 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: job-sample-hello
+spec:
+  suspend: true # The field suspend is required to be true to disallow Kubernetes to start this job when it will be created
+  ttlSecondsAfterFinished: 300
+  template:
+    spec:
+      containers:
+      - name: hello
+        image: bash
+        command: ["echo",  "hello world"]
+      restartPolicy: Never
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: job-sample-hi
+spec:
+  suspend: true # The field suspend is required to be true to disallow Kubernetes to start this job when it will be created
+  ttlSecondsAfterFinished: 300
+  template:
+    spec:
+      containers:
+      - name: hi
+        image: bash
+        command: ["echo",  "hi world"]
+      restartPolicy: Never
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: job-sample-random-exit
+spec:
+  suspend: true # The field suspend is required to be true to disallow Kubernetes to start this job when it will be created
+  ttlSecondsAfterFinished: 300
+  backoffLimit: 0 # This Job could fails, so do not try again to run it
+  template:
+    spec:
+      containers:
+      - name: random-exit
+        image: bash
+        command: ["sh", "-c", "exit $$(($RANDOM % 2))"]
+      restartPolicy: Never
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: job-sample-all-ok
+spec:
+  suspend: true # The field suspend is required to be true to disallow Kubernetes to start this job when it will be created
+  ttlSecondsAfterFinished: 300
+  template:
+    spec:
+      containers:
+      - name: all-ok
+        image: bash
+        command: ["echo",  "all was ok"]
+      restartPolicy: Never
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: job-sample-all-bad
+spec:
+  suspend: true # The field suspend is required to be true to disallow Kubernetes to start this job when it will be created
+  ttlSecondsAfterFinished: 300
+  template:
+    spec:
+      containers:
+      - name: all-bad
+        image: bash
+        command: ["echo",  "all was bad"]
+      restartPolicy: Never
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: job-sample-some-successes
+spec:
+  suspend: true # The field suspend is required to be true to disallow Kubernetes to start this job when it will be created
+  ttlSecondsAfterFinished: 300
+  template:
+    spec:
+      containers:
+      - name: some-successes
+        image: bash
+        command: ["echo",  "some successes"]
+      restartPolicy: Never
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: job-sample-some-failures
+spec:
+  suspend: true # The field suspend is required to be true to disallow Kubernetes to start this job when it will be created
+  ttlSecondsAfterFinished: 300
+  template:
+    spec:
+      containers:
+      - name: some-failures
+        image: bash
+        command: ["echo",  "some failures"]
+      restartPolicy: Never
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: job-sample-bye
+spec:
+  suspend: true # The field suspend is required to be true to disallow Kubernetes to start this job when it will be created
+  ttlSecondsAfterFinished: 300
+  template:
+    spec:
+      containers:
+      - name: bye
+        image: bash
+        command: ["echo",  "bye"]
+      restartPolicy: Never

@@ -1,0 +1,225 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.13.0
+  name: workflowwebhookrequests.simple-cicd.jlsalvador.online
+spec:
+  group: simple-cicd.jlsalvador.online
+  names:
+    kind: WorkflowWebhookRequest
+    listKind: WorkflowWebhookRequestList
+    plural: workflowwebhookrequests
+    singular: workflowwebhookrequest
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: WorkflowWebhookRequest is the Schema for the workflowwebhookrequests
+          API
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: WorkflowWebhookRequestSpec defines the desired state of WorkflowWebhookRequest
+            properties:
+              body:
+                description: Body of the HTTP request as Base64 encoded data. The
+                  serialized form of the Body is a base64 encoded string, representing
+                  the arbitrary (possibly non-string) data value. Described in https://tools.ietf.org/html/rfc4648#section-4
+                format: byte
+                type: string
+              currentJobs:
+                description: List of Jobs running associated with current Workflows
+                  triggered.
+                items:
+                  properties:
+                    name:
+                      type: string
+                    namespace:
+                      type: string
+                  required:
+                  - name
+                  - namespace
+                  type: object
+                type: array
+              currentWorkflows:
+                description: List of Workflows currently triggered.
+                items:
+                  properties:
+                    name:
+                      type: string
+                    namespace:
+                      type: string
+                  required:
+                  - name
+                  - namespace
+                  type: object
+                type: array
+              done:
+                description: When set to true, instructs the operator to skip this
+                  WorkflowWebhookRequest during future reconciliations.
+                type: boolean
+              headers:
+                additionalProperties:
+                  items:
+                    type: string
+                  type: array
+                description: Contains headers for the HTTP request.
+                type: object
+              host:
+                description: Specifies the host on which the URL is sought.
+                type: string
+              method:
+                description: Specifies the HTTP method (GET, POST, PUT, etc.).
+                type: string
+              nextWorkflows:
+                description: List of the next Workflows to be triggered.
+                items:
+                  properties:
+                    name:
+                      description: Workflow name
+                      type: string
+                    namespace:
+                      description: Workflow namespace
+                      type: string
+                    when:
+                      description: "Describes the conditions for when a Job will be
+                        handled. If not specified, the default behavior is \"Always\".
+                        \n Possible statuses: - OnSuccess: The Job will be handled
+                        when all previous Jobs were successful. - OnAnySuccess: The
+                        Job will be handled when any previous Job was successful.
+                        - OnFailure: The Job will be handled when all previous Jobs
+                        were not successful. - OnAnyFailure: The Job will be handled
+                        when any previous Job was not successful. - Always: The Job
+                        will always be handled."
+                      enum:
+                      - OnSuccess
+                      - OnAnySuccess
+                      - OnFailure
+                      - OnAnyFailure
+                      - Always
+                      type: string
+                  required:
+                  - name
+                  - namespace
+                  type: object
+                type: array
+              url:
+                description: Specifies the URI being requested.
+                type: string
+              workflowWebhook:
+                description: Reference to the WorkflowWebhook.
+                properties:
+                  name:
+                    type: string
+                  namespace:
+                    type: string
+                required:
+                - name
+                - namespace
+                type: object
+            required:
+            - workflowWebhook
+            type: object
+          status:
+            description: WorkflowWebhookRequestStatus defines the observed state of
+              WorkflowWebhookRequest
+            properties:
+              conditions:
+                description: "Represents the observations of a WorkflowWebhookRequestStatus's
+                  current state. WorkflowWebhookRequestStatus.Status.Conditions.Type
+                  are: \"Progressing\", \"Waiting\", \"Done\" WorkflowWebhookRequestStatus.Status.Conditions.Status
+                  are one of True, False, Unknown. WorkflowWebhookRequestStatus.Status.Conditions.Reason
+                  the value should be a CamelCase string and producers of specific
+                  condition types may define expected values and meanings for this
+                  field, and whether the values are considered a guaranteed API. WorkflowWebhookRequestStatus.Status.Conditions.Message
+                  is a human readable message indicating details about the transition.
+                  For further information see: https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md#typical-status-properties
+                  \n Conditions store the status conditions of the WorkflowWebhookRequestStatus
+                  instances"
+                items:
+                  description: "Condition contains details for one aspect of the current
+                    state of this API Resource. --- This struct is intended for direct
+                    use as an array at the field path .status.conditions.  For example,
+                    \n type FooStatus struct{ // Represents the observations of a
+                    foo's current state. // Known .status.conditions.type are: \"Available\",
+                    \"Progressing\", and \"Degraded\" // +patchMergeKey=type // +patchStrategy=merge
+                    // +listType=map // +listMapKey=type Conditions []metav1.Condition
+                    `json:\"conditions,omitempty\" patchStrategy:\"merge\" patchMergeKey:\"type\"
+                    protobuf:\"bytes,1,rep,name=conditions\"` \n // other fields }"
+                  properties:
+                    lastTransitionTime:
+                      description: lastTransitionTime is the last time the condition
+                        transitioned from one status to another. This should be when
+                        the underlying condition changed.  If that is not known, then
+                        using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: message is a human readable message indicating
+                        details about the transition. This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: observedGeneration represents the .metadata.generation
+                        that the condition was set based upon. For instance, if .metadata.generation
+                        is currently 12, but the .status.conditions[x].observedGeneration
+                        is 9, the condition is out of date with respect to the current
+                        state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: reason contains a programmatic identifier indicating
+                        the reason for the condition's last transition. Producers
+                        of specific condition types may define expected values and
+                        meanings for this field, and whether the values are considered
+                        a guaranteed API. The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                        --- Many .condition.type values are consistent across resources
+                        like Available, but because arbitrary conditions can be useful
+                        (see .node.status.conditions), the ability to deconflict is
+                        important. The regex it matches is (dns1123SubdomainFmt/)?(qualifiedNameFmt)
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

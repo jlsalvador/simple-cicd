@@ -1,0 +1,27 @@
+# permissions for end users to view workflowwebhookrequests.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/name: clusterrole
+    app.kubernetes.io/instance: workflowwebhookrequest-viewer-role
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/created-by: simple-cicd
+    app.kubernetes.io/part-of: simple-cicd
+    app.kubernetes.io/managed-by: kustomize
+  name: workflowwebhookrequest-viewer-role
+rules:
+- apiGroups:
+  - simple-cicd.jlsalvador.online
+  resources:
+  - workflowwebhookrequests
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - simple-cicd.jlsalvador.online
+  resources:
+  - workflowwebhookrequests/status
+  verbs:
+  - get

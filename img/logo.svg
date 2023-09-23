@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   width="275"
+   height="120"
+   viewBox="0 0 275 120"
+   version="1.1"
+   id="svg1"
+   inkscape:version="1.3 (0e150ed6c4, 2023-07-21)"
+   sodipodi:docname="logo.svg"
+   inkscape:export-filename="logo.png"
+   inkscape:export-xdpi="134.00546"
+   inkscape:export-ydpi="134.00546"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <sodipodi:namedview
+     id="namedview1"
+     pagecolor="#ffffff"
+     bordercolor="#111111"
+     borderopacity="1"
+     inkscape:showpageshadow="0"
+     inkscape:pageopacity="0"
+     inkscape:pagecheckerboard="1"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:document-units="px"
+     inkscape:export-bgcolor="#ffffff00"
+     inkscape:zoom="3.0595303"
+     inkscape:cx="161.62611"
+     inkscape:cy="18.63031"
+     inkscape:window-width="2520"
+     inkscape:window-height="1412"
+     inkscape:window-x="0"
+     inkscape:window-y="0"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="layer1" />
+  <defs
+     id="defs1">
+    <clipPath
+       clipPathUnits="userSpaceOnUse"
+       id="clipPath1">
+      <rect
+         style="fill:#000000;fill-opacity:1;stroke-width:2"
+         id="rect2"
+         width="55.583427"
+         height="91.86866"
+         x="230.65388"
+         y="92.677567" />
+    </clipPath>
+    <clipPath
+       clipPathUnits="userSpaceOnUse"
+       id="clipPath1-6">
+      <rect
+         style="fill:#000000;fill-opacity:1;stroke-width:2"
+         id="rect2-1"
+         width="55.583427"
+         height="91.86866"
+         x="230.65388"
+         y="92.677567" />
+    </clipPath>
+  </defs>
+  <g
+     inkscape:label="Capa 1"
+     inkscape:groupmode="layer"
+     id="layer1">
+    <g
+       id="g1"
+       transform="translate(0,1.0000003)">
+      <text
+         xml:space="preserve"
+         style="font-weight:900;font-size:64px;font-family:'Noto Sans';-inkscape-font-specification:'Noto Sans Heavy';fill:#ffffff;stroke-width:2"
+         x="82.429916"
+         y="76.351997"
+         id="text1"><tspan
+           sodipodi:role="line"
+           id="tspan1"
+           x="82.429916"
+           y="76.351997"
+           style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:64px;font-family:'Nimbus Sans';-inkscape-font-specification:'Nimbus Sans Bold';fill:#000000;fill-opacity:1">imple</tspan></text>
+      <g
+         id="g3">
+        <rect
+           style="fill:#1e4854;fill-opacity:1;stroke-width:1.37382"
+           id="rect3-5-7"
+           width="14.767"
+           height="49.972664"
+           x="52.789127"
+           y="26.389595" />
+        <circle
+           style="fill:#1e4854;fill-opacity:1;stroke-width:2"
+           id="path1-5"
+           cx="231.08122"
+           cy="133.02695"
+           r="35.626385"
+           clip-path="url(#clipPath1-6)"
+           transform="matrix(-0.73131907,0,0,-0.70176117,222.37049,144.74742)" />
+        <circle
+           style="fill:#11747b;fill-opacity:1;stroke-width:2"
+           id="path1"
+           cx="231.08122"
+           cy="133.02695"
+           r="35.626385"
+           clip-path="url(#clipPath1)"
+           transform="matrix(0.73131907,0,0,0.70176117,-112.56842,-26.743955)" />
+        <rect
+           style="fill:#11747b;fill-opacity:1;stroke-width:1.37382"
+           id="rect3-5"
+           width="14.766943"
+           height="49.972664"
+           x="42.115101"
+           y="41.629936" />
+      </g>
+    </g>
+  </g>
+</svg>
