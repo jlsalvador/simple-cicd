@@ -5,4 +5,4 @@ resources:
 images:
 - name: controller
   newName: jlsalvador/simple-cicd
-  newTag: 0.0.2
+  newTag: 0.0.3
