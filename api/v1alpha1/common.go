@@ -36,7 +36,7 @@ func (nn NamespacedName) String() string {
 
 func (nn NamespacedName) AsType(defaultNamespace string) types.NamespacedName {
 	var ns string
-	if len(*nn.Namespace) > 0 {
+	if nn.Namespace != nil && len(*nn.Namespace) > 0 {
 		ns = *nn.Namespace
 	} else {
 		ns = defaultNamespace
