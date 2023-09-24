@@ -44,7 +44,6 @@ spec:
                       type: string
                   required:
                   - name
-                  - namespace
                   type: object
                 type: array
               next:
@@ -76,7 +75,6 @@ spec:
                       type: string
                   required:
                   - name
-                  - namespace
                   type: object
                 type: array
               suspend:

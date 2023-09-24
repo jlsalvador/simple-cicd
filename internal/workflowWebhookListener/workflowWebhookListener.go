@@ -150,7 +150,7 @@ func webhookHandler(c client.Client, ctx context.Context, w http.ResponseWriter,
 		},
 		Spec: simplecicdv1alpha1.WorkflowWebhookRequestSpec{
 			WorkflowWebhook: simplecicdv1alpha1.NamespacedName{
-				Namespace: ww.Namespace,
+				Namespace: &ww.Namespace,
 				Name:      ww.Name,
 			},
 			Host:    r.Host,

@@ -156,7 +156,7 @@ func (r *WorkflowWebhookRequestReconciler) Reconcile(ctx context.Context, req ct
 
 		// Fetch the ref. WorkflowWebhook
 		ww := &simplecicdv1alpha1.WorkflowWebhook{}
-		if err := r.Get(ctx, wwr.Spec.WorkflowWebhook.AsType(), ww); err != nil {
+		if err := r.Get(ctx, wwr.Spec.WorkflowWebhook.AsType(wwr.Namespace), ww); err != nil {
 			if apierrors.IsNotFound(err) {
 				// If the custom resource is not found then, it usually means that it was deleted or not created
 				// In this way, we will stop the reconciliation
@@ -197,10 +197,10 @@ func (r *WorkflowWebhookRequestReconciler) Reconcile(ctx context.Context, req ct
 			"Status", wwr.Status,
 		)
 
-		for _, wnn := range wwr.Spec.CurrentWorkflows {
+		for _, workflowNamespacedName := range wwr.Spec.CurrentWorkflows {
 			w := &simplecicdv1alpha1.Workflow{}
-			if err := r.Get(ctx, wnn.AsType(), w); err != nil {
-				emsg := fmt.Errorf("can not fetch Workflow %s", wnn)
+			if err := r.Get(ctx, workflowNamespacedName.AsType(wwr.Namespace), w); err != nil {
+				emsg := fmt.Errorf("can not fetch Workflow %s", workflowNamespacedName)
 				log.Error(err, emsg.Error())
 				return ctrl.Result{}, errors.Join(err, emsg)
 			}
@@ -234,18 +234,18 @@ func (r *WorkflowWebhookRequestReconciler) Reconcile(ctx context.Context, req ct
 		for _, workflowNamespacedName := range wwr.Spec.CurrentWorkflows {
 
 			// Fetch Workflow to fetch its jobs to be cloned
-			w := &simplecicdv1alpha1.Workflow{}
-			if err := r.Get(ctx, workflowNamespacedName.AsType(), w); err != nil {
+			workflow := &simplecicdv1alpha1.Workflow{}
+			if err := r.Get(ctx, workflowNamespacedName.AsType(wwr.Namespace), workflow); err != nil {
 				emsg := fmt.Errorf("can not fetch Workflow %s", workflowNamespacedName)
 				log.Error(err, emsg.Error())
 				return ctrl.Result{}, errors.Join(err, emsg)
 			}
 
 			// Create a Job for each Workflow.Spec.JobsToBeCloned and add ref. into WorkflowWebhookRequest.Spec.CurrentJobs
-			numJobsToBeCloned := len(w.Spec.JobsToBeCloned)
-			for i, jnn := range w.Spec.JobsToBeCloned {
+			numJobsToBeCloned := len(workflow.Spec.JobsToBeCloned)
+			for i, jnn := range workflow.Spec.JobsToBeCloned {
 				job := &batchv1.Job{}
-				if err := r.Get(ctx, jnn.AsType(), job); err != nil {
+				if err := r.Get(ctx, jnn.AsType(wwr.Namespace), job); err != nil {
 					emsg := fmt.Errorf(`can not fetch Job "%s"`, jnn)
 					log.Error(err, emsg.Error())
 					return ctrl.Result{}, errors.Join(err, emsg)
@@ -266,13 +266,13 @@ func (r *WorkflowWebhookRequestReconciler) Reconcile(ctx context.Context, req ct
 					fullUnsafeName = fmt.Sprintf("%s-%s-%d-%s", wwr.Name, job.Name, i, wwrUid)
 				}
 				newJobNamespacedName := simplecicdv1alpha1.NamespacedName{
-					Namespace: wwr.Namespace,
+					Namespace: &workflow.Namespace,
 					Name:      rfc1123.GenerateSafeLengthName(fullUnsafeName),
 				}
 
 				// Check if the Job already exists
 				newJob := &batchv1.Job{}
-				if err := r.Get(ctx, newJobNamespacedName.AsType(), newJob); err != nil {
+				if err := r.Get(ctx, newJobNamespacedName.AsType(wwr.Namespace), newJob); err != nil {
 					if !apierrors.IsNotFound(err) {
 						emsg := fmt.Errorf(`can not fetch Job %q`, newJobNamespacedName)
 						log.Error(err, emsg.Error())
@@ -289,7 +289,7 @@ func (r *WorkflowWebhookRequestReconciler) Reconcile(ctx context.Context, req ct
 					// Set the ownerRef for the Job
 					// More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/owners-dependents/
 					if err := ctrl.SetControllerReference(wwr, newJob, r.Scheme); err != nil {
-						emsg := fmt.Errorf(`can not set reference for Job %s/%s as %s/%s`, jnn.Namespace, jnn.Name, wwr.Namespace, wwr.Name)
+						emsg := fmt.Errorf(`can not set reference for Job %s/%s as %s/%s`, *jnn.Namespace, jnn.Name, wwr.Namespace, wwr.Name)
 						log.Error(err, emsg.Error())
 						return ctrl.Result{}, errors.Join(err, emsg)
 					}
@@ -361,7 +361,7 @@ func (r *WorkflowWebhookRequestReconciler) Reconcile(ctx context.Context, req ct
 
 			log.Info("Fetching Job", "Job", jobNamespacedName)
 			job := &batchv1.Job{}
-			if err := r.Get(ctx, jobNamespacedName.AsType(), job); err != nil {
+			if err := r.Get(ctx, jobNamespacedName.AsType(wwr.Namespace), job); err != nil {
 				emsg := fmt.Errorf(`can not fetch Job "%s"`, jobNamespacedName)
 				log.Error(err, emsg.Error())
 				return ctrl.Result{}, errors.Join(err, emsg)
@@ -589,7 +589,7 @@ func cloneJob(job *batchv1.Job, njnn simplecicdv1alpha1.NamespacedName) *batchv1
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      njnn.Name,
-			Namespace: njnn.Namespace,
+			Namespace: *njnn.Namespace,
 		},
 		Spec: batchv1.JobSpec{
 			ActiveDeadlineSeconds:   job.Spec.ActiveDeadlineSeconds,

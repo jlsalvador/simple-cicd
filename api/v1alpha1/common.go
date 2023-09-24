@@ -23,20 +23,27 @@ import (
 )
 
 type NamespacedName struct {
-	// +required
-	Namespace string `json:"namespace"`
+	// +optional
+	Namespace *string `json:"namespace,omitempty"`
 
 	// +required
 	Name string `json:"name"`
 }
 
 func (nn NamespacedName) String() string {
-	return fmt.Sprintf("%s/%s", nn.Namespace, nn.Name)
+	return fmt.Sprintf("%s/%s", *nn.Namespace, nn.Name)
 }
 
-func (nn NamespacedName) AsType() types.NamespacedName {
+func (nn NamespacedName) AsType(defaultNamespace string) types.NamespacedName {
+	var ns string
+	if len(*nn.Namespace) > 0 {
+		ns = *nn.Namespace
+	} else {
+		ns = defaultNamespace
+	}
+
 	return types.NamespacedName{
-		Namespace: nn.Namespace,
+		Namespace: ns,
 		Name:      nn.Name,
 	}
 }

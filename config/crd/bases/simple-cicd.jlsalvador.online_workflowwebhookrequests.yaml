@@ -52,7 +52,6 @@ spec:
                       type: string
                   required:
                   - name
-                  - namespace
                   type: object
                 type: array
               currentWorkflows:
@@ -65,7 +64,6 @@ spec:
                       type: string
                   required:
                   - name
-                  - namespace
                   type: object
                 type: array
               done:
@@ -114,7 +112,6 @@ spec:
                       type: string
                   required:
                   - name
-                  - namespace
                   type: object
                 type: array
               url:
@@ -129,7 +126,6 @@ spec:
                     type: string
                 required:
                 - name
-                - namespace
                 type: object
             required:
             - workflowWebhook

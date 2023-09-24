@@ -54,8 +54,8 @@ const (
 
 type NextWorkflow struct {
 	// Workflow namespace
-	// +required
-	Namespace string `json:"namespace"`
+	// +optional
+	Namespace *string `json:"namespace,omitempty"`
 
 	// Workflow name
 	// +required
@@ -80,7 +80,7 @@ func (nw NextWorkflow) String() string {
 	if nw.When != nil {
 		when = *nw.When
 	}
-	return fmt.Sprintf("%s/%s@%s", nw.Namespace, nw.Name, when)
+	return fmt.Sprintf("%s/%s@%s", *nw.Namespace, nw.Name, when)
 }
 
 func (nw NextWorkflow) AsNamespacedName() NamespacedName {
