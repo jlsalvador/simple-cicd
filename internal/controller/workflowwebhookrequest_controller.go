@@ -426,8 +426,8 @@ func (r *WorkflowWebhookRequestReconciler) Reconcile(ctx context.Context, req ct
 			)
 			if (nextWorkflowNamespacedName.When == nil || *nextWorkflowNamespacedName.When == simplecicdv1alpha1.Always) ||
 				(numErrors > 0 && numErrors < numJobs && (*nextWorkflowNamespacedName.When == simplecicdv1alpha1.OnAnyFailure || *nextWorkflowNamespacedName.When == simplecicdv1alpha1.OnAnySuccess)) ||
-				(numErrors == 0 && *nextWorkflowNamespacedName.When == simplecicdv1alpha1.OnSuccess) ||
-				(numErrors == numJobs && *nextWorkflowNamespacedName.When == simplecicdv1alpha1.OnFailure) {
+				(numErrors == 0 && (*nextWorkflowNamespacedName.When == simplecicdv1alpha1.OnSuccess || *nextWorkflowNamespacedName.When == simplecicdv1alpha1.OnAnySuccess)) ||
+				(numErrors == numJobs && (*nextWorkflowNamespacedName.When == simplecicdv1alpha1.OnFailure || *nextWorkflowNamespacedName.When == simplecicdv1alpha1.OnAnyFailure)) {
 
 				// Add next workflow as current
 				wwr.Spec.CurrentWorkflows = append(wwr.Spec.CurrentWorkflows, nextWorkflowNamespacedName.AsNamespacedName())
