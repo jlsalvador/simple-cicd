@@ -28,8 +28,8 @@ spec:
   selector:
     control-plane: controller-manager
   ports:
-    - name: listener
-      targetPort: listener
+    - name: http
+      targetPort: http
       port: 9000
       protocol: TCP
 ---
@@ -103,7 +103,7 @@ spec:
           initialDelaySeconds: 5
           periodSeconds: 10
         ports:
-          - name: listener
+          - name: http
             containerPort: 9000
             protocol: TCP
         resources:

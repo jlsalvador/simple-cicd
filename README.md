@@ -96,6 +96,7 @@ spec:
             - /var/run/secrets/kubernetes.io/request/host
             - /var/run/secrets/kubernetes.io/request/method
             - /var/run/secrets/kubernetes.io/request/url
+      restartPolicy: Never # Do not re-run the pod if something fails
 ---
 # Workflow that will clones the "job-example-error" Job
 apiVersion: simple-cicd.jlsalvador.online/v1alpha1
@@ -141,10 +142,12 @@ apiVersion: v1
 kind: Secret
 metadata:
   name: basic-auth-example
-  namespace: simplecicd-system # Namespace where the ingress-example is deployed
+  namespace: simple-cicd-system # Namespace where the ingress-example is deployed
 type: Opaque
 stringData:
-  user: user:$apr1$j.P.ucaS$hHtkMN19glS9.ffLns2Eh/ # user:pass
+  auth: |
+    # user:pass
+    user:$apr1$j.P.ucaS$hHtkMN19glS9.ffLns2Eh/
 ---
 # Optional, allows external requests from the cluster.
 # Public Ingress listening at http://example.org/default/workflowwebhook-example with basic authorization.
@@ -152,7 +155,7 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: ingress-example
-  namespace: simplecicd-system # Namespace where the simple-cicd-controller-manager is deployed
+  namespace: simple-cicd-system # Namespace where the simple-cicd-controller-manager is deployed
   annotations:
     nginx.ingress.kubernetes.io/auth-type: basic
     nginx.ingress.kubernetes.io/auth-secret: basic-auth-example
@@ -166,9 +169,9 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: simplecicd-controller-manager # The simple-cicd operator service name
+                name: simple-cicd-controller-manager # The simple-cicd operator service name
                 port:
-                  name: workflow
+                  name: http
 ```
 
 ```sh
@@ -176,7 +179,7 @@ spec:
 curl -u user:pass http://example.org/default/workflowwebhook-sample
 
 # To trigger the WorkflowWebhook from inside the cluster:
-curl http://simplecicd-controller-manager.simplecicd-system:9000/default/workflowwebhook-sample
+curl http://simple-cicd-controller-manager.simple-cicd-system:9000/default/workflowwebhook-sample
 ```
 
 ### Motivation
