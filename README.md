@@ -61,7 +61,6 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: job-example-random-exit
-  namespace: default
 spec:
   suspend: true # Required to be true to disallow Kubernetes to start this job when it will be created
   backoffLimit: 0 # If this Job fail do not try to run it again
@@ -78,7 +77,7 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: job-example-error
-  namespace: default
+  namespace: default # Job namespace. Optional
 spec:
   suspend: true # Required to be true to disallow Kubernetes to start this job when it will be created
   template:
@@ -103,11 +102,11 @@ apiVersion: simple-cicd.jlsalvador.online/v1alpha1
 kind: Workflow
 metadata:
   name: workflow-example-some-failures
-  namespace: default
+  namespace: default # Workflow namespace. Optional.
 spec:
   jobsToBeCloned:
     - name: job-example-error # Job name that will cloned
-      namespace: default # Job namespace
+      namespace: default # Job namespace. Optional.
 ---
 # Workflow that will clones the "job-example-random-exit" Job and
 # triggers the "workflow-example-some-failures" Workflow on any Job failure
@@ -115,14 +114,12 @@ apiVersion: simple-cicd.jlsalvador.online/v1alpha1
 kind: Workflow
 metadata:
   name: workflow-example
-  namespace: default
 spec:
   jobsToBeCloned:
     - name: job-example-random-exit # Job name that will cloned
-      namespace: default # Job namespace
   next:
     - name: workflow-example-some-failures
-      namespace: default
+      namespace: default # Workflow namespace. Optional.
       when: OnAnyFailure # Only run this Workflow if some of the jobsToBeCloned fails
 ---
 # WorkflowWebhook set the simple-cicd operator to listen for requests on the path "$namespace/$name"
@@ -130,11 +127,9 @@ apiVersion: simple-cicd.jlsalvador.online/v1alpha1
 kind: WorkflowWebhook
 metadata:
   name: workflowwebhook-example
-  namespace: default
 spec:
   workflows:
     - name: workflow-example # Workflow that will be initiated
-      namespace: default # Workflow namespace
 ---
 # Optional, recommended for public requests.
 # Secret for the next Ingress, recommended for preventing undesired requests.

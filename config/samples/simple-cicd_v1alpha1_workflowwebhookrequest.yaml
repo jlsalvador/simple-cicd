@@ -11,7 +11,6 @@ metadata:
 spec:
   workflowWebhook:
     name: workflowwebhook-sample
-    namespace: default
   host: simplecicd-controller-manager.simplecicd-system:9000
   method: GET
   url: /default/workflowwebhook-sample

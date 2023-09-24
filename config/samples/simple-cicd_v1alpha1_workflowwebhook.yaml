@@ -11,6 +11,4 @@ metadata:
 spec:
   workflows:
   - name: workflow-sample-hello
-    namespace: default
   - name: workflow-sample-hi
-    namespace: default

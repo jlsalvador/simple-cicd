@@ -12,10 +12,8 @@ spec:
   suspend: true
   jobsToBeCloned:
     - name: job-sample-hello
-      namespace: default
   next:
     - name: workflow-sample-random
-      namespace: default
       # when: # when is optional, by default is "Always"
 ---
 apiVersion: simple-cicd.jlsalvador.online/v1alpha1
@@ -32,7 +30,6 @@ spec:
   suspend: true
   jobsToBeCloned:
     - name: job-sample-hi
-      namespace: default
 ---
 apiVersion: simple-cicd.jlsalvador.online/v1alpha1
 kind: Workflow
@@ -47,22 +44,16 @@ metadata:
 spec:
   suspend: true
   jobsToBeCloned:
-    - namespace: default
-      name: job-sample-random-exit
-    - namespace: default
-      name: job-sample-random-exit
+    - name: job-sample-random-exit
+    - name: job-sample-random-exit
   next:
     - name: workflow-sample-all-ok
-      namespace: default
       when: OnSuccess
     - name: workflow-sample-all-bad
-      namespace: default
       when: OnFailure
     - name: workflow-sample-some-successes
-      namespace: default
       when: OnAnySuccess
     - name: workflow-sample-some-failures
-      namespace: default
       when: OnAnyFailure
 ---
 apiVersion: simple-cicd.jlsalvador.online/v1alpha1
@@ -78,11 +69,9 @@ metadata:
 spec:
   suspend: true
   jobsToBeCloned:
-    - namespace: default
-      name: job-sample-all-ok
+    - name: job-sample-all-ok
   next:
-    - namespace: default
-      name: workflow-sample-bye
+    - name: workflow-sample-bye
       when: Always
 ---
 apiVersion: simple-cicd.jlsalvador.online/v1alpha1
@@ -98,11 +87,9 @@ metadata:
 spec:
   suspend: true
   jobsToBeCloned:
-    - namespace: default
-      name: job-sample-all-bad
+    - name: job-sample-all-bad
   next:
-    - namespace: default
-      name: workflow-sample-bye
+    - name: workflow-sample-bye
       when: Always
 ---
 apiVersion: simple-cicd.jlsalvador.online/v1alpha1
@@ -118,11 +105,9 @@ metadata:
 spec:
   suspend: true
   jobsToBeCloned:
-    - namespace: default
-      name: job-sample-some-successes
+    - name: job-sample-some-successes
   next:
-    - namespace: default
-      name: workflow-sample-bye
+    - name: workflow-sample-bye
       when: Always
 ---
 apiVersion: simple-cicd.jlsalvador.online/v1alpha1
@@ -138,11 +123,9 @@ metadata:
 spec:
   suspend: true
   jobsToBeCloned:
-    - namespace: default
-      name: job-sample-some-failures
+    - name: job-sample-some-failures
   next:
-    - namespace: default
-      name: workflow-sample-bye
+    - name: workflow-sample-bye
       when: Always
 ---
 apiVersion: simple-cicd.jlsalvador.online/v1alpha1
@@ -158,5 +141,4 @@ metadata:
 spec:
   suspend: true
   jobsToBeCloned:
-    - namespace: default
-      name: job-sample-bye
+    - name: job-sample-bye
