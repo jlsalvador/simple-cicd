@@ -1,0 +1,93 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "charts.fullname" . }}-manager-role
+  labels:
+  {{- include "charts.labels" . | nindent 4 }}
+rules:
+- apiGroups:
+  - batch
+  resources:
+  - jobs
+  verbs:
+  - create
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - create
+  - get
+  - list
+  - watch
+- apiGroups:
+  - simple-cicd.jlsalvador.online
+  resources:
+  - workflows
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - simple-cicd.jlsalvador.online
+  resources:
+  - workflows/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - simple-cicd.jlsalvador.online
+  resources:
+  - workflowwebhookrequests
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - simple-cicd.jlsalvador.online
+  resources:
+  - workflowwebhookrequests/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - simple-cicd.jlsalvador.online
+  resources:
+  - workflowwebhooks
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - simple-cicd.jlsalvador.online
+  resources:
+  - workflowwebhooks/finalizers
+  verbs:
+  - update
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "charts.fullname" . }}-manager-rolebinding
+  labels:
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/created-by: simple-cicd
+    app.kubernetes.io/part-of: simple-cicd
+  {{- include "charts.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: '{{ include "charts.fullname" . }}-manager-role'
+subjects:
+- kind: ServiceAccount
+  name: '{{ include "charts.fullname" . }}-controller-manager'
+  namespace: '{{ .Release.Namespace }}'

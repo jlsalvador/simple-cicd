@@ -1,0 +1,99 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.13.0
+  name: workflows.simple-cicd.jlsalvador.online
+spec:
+  group: simple-cicd.jlsalvador.online
+  names:
+    kind: Workflow
+    listKind: WorkflowList
+    plural: workflows
+    shortNames:
+    - w
+    singular: workflow
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - description: When is true, the execution of this workflow will be skipped.
+      jsonPath: .spec.suspend
+      name: Suspend
+      type: boolean
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: Workflow is the Schema for the workflows API
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: WorkflowSpec defines the desired state of Workflow
+            properties:
+              jobsToBeCloned:
+                description: Jobs to be cloned
+                items:
+                  properties:
+                    name:
+                      type: string
+                    namespace:
+                      type: string
+                  required:
+                  - name
+                  type: object
+                type: array
+              next:
+                description: Optional list of Workflow to execute next
+                items:
+                  properties:
+                    name:
+                      description: Workflow name
+                      type: string
+                    namespace:
+                      description: Workflow namespace
+                      type: string
+                    when:
+                      default: Always
+                      description: "Describes the conditions for when a Job will be
+                        handled. If not specified, the default behavior is \"Always\".
+                        \n Possible statuses: - OnSuccess: The Job will be handled
+                        when all previous Jobs were successful. - OnAnySuccess: The
+                        Job will be handled when any previous Job was successful.
+                        - OnFailure: The Job will be handled when all previous Jobs
+                        were not successful. - OnAnyFailure: The Job will be handled
+                        when any previous Job was not successful. - Always: The Job
+                        will always be handled."
+                      enum:
+                      - OnSuccess
+                      - OnAnySuccess
+                      - OnFailure
+                      - OnAnyFailure
+                      - Always
+                      type: string
+                  required:
+                  - name
+                  type: object
+                type: array
+              suspend:
+                default: false
+                description: When is true, the execution of this workflow will be
+                  skipped, disabling the ability to create new Jobs referred to by
+                  this Workflow. Defaults to false.
+                type: boolean
+            required:
+            - jobsToBeCloned
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources: {}

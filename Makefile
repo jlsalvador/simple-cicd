@@ -164,6 +164,7 @@ KUBECTL ?= kubectl
 KUSTOMIZE ?= $(LOCALBIN)/kustomize
 CONTROLLER_GEN ?= $(LOCALBIN)/controller-gen
 ENVTEST ?= $(LOCALBIN)/setup-envtest
+HELMIFY ?= $(LOCALBIN)/helmify
 GINKGO ?= $(LOCALBIN)/ginkgo
 GOCYCLO ?= $(LOCALBIN)/gocyclo
 MISSPELL ?= $(LOCALBIN)/misspell
@@ -173,6 +174,7 @@ KUSTOMIZE_VERSION ?= v5.1.1
 CONTROLLER_TOOLS_VERSION ?= v0.13.0
 ENVTEST_VERSION ?= latest
 GINKGO_VERSION ?= latest
+HELMIFY_VERSION ?= latest
 GOCYCLO_VERSION ?= latest
 MISSPELL_VERSION ?= latest
 
@@ -196,6 +198,11 @@ envtest: $(ENVTEST) ## Download envtest-setup locally if necessary.
 $(ENVTEST): $(LOCALBIN)
 	test -s $(LOCALBIN)/setup-envtest || GOBIN=$(LOCALBIN) go install sigs.k8s.io/controller-runtime/tools/setup-envtest@$(ENVTEST_VERSION)
 
+.PHONY: helmify
+helmify: $(HELMIFY) ## Download helmify locally if necessary.
+$(HELMIFY): $(LOCALBIN)
+	test -s $(LOCALBIN)/helmify || GOBIN=$(LOCALBIN) go install github.com/arttor/helmify/cmd/helmify@$(HELMIFY_VERSION)
+
 .PHONY: ginkgo
 ginkgo: $(GINKGO) ## Download ginkgo locally if necessary.
 $(GINKGO): $(LOCALBIN)
@@ -210,3 +217,7 @@ $(GOCYCLO): $(LOCALBIN)
 misspell: $(MISSPELL) ## Download misspell locally if necessary.
 $(MISSPELL): $(LOCALBIN)
 	test -s $(LOCALBIN)/misspell || GOBIN=$(LOCALBIN) go install github.com/client9/misspell/cmd/misspell@$(MISSPELL_VERSION)
+
+.PHONY: helm
+helm: manifests kustomize helmify
+	$(KUSTOMIZE) build config/default | $(HELMIFY) -crd-dir charts

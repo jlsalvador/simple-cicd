@@ -1,0 +1,80 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.13.0
+  name: workflowwebhooks.simple-cicd.jlsalvador.online
+spec:
+  group: simple-cicd.jlsalvador.online
+  names:
+    kind: WorkflowWebhook
+    listKind: WorkflowWebhookList
+    plural: workflowwebhooks
+    shortNames:
+    - ww
+    singular: workflowwebhook
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - description: When is true, any refered WorkflowWebhookRequest will be dropped.
+      jsonPath: .spec.suspend
+      name: Suspend
+      type: boolean
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: WorkflowWebhook is the Schema for the workflowwebhooks API
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: WorkflowWebhookSpec defines the desired state of WorkflowWebhook
+            properties:
+              concurrencyPolicy:
+                default: Allow
+                description: "ConcurrencyPolicy specifies how concurrent executions
+                  of WorkflowWebhookRequests that refer to this WorkflowWebhook should
+                  be treated. \n Choose one of the following concurrency policies:
+                  - \"Allow\": Allows concurrent WorkflowWebhookRequests. - \"Forbid\":
+                  Skips new WorkflowWebhookRequests if previous ones are still in
+                  progress. - \"Replace\": Deletes old WorkflowWebhookRequests if
+                  new ones arrive before completion."
+                enum:
+                - Allow
+                - Forbid
+                - Replace
+                type: string
+              suspend:
+                default: false
+                description: When is true, any WorkflowWebhookRequest that refers
+                  to this WorkflowWebhook will be dropped. Defaults to false.
+                type: boolean
+              workflows:
+                description: Specifies the list of Workflows to run.
+                items:
+                  properties:
+                    name:
+                      type: string
+                    namespace:
+                      type: string
+                  required:
+                  - name
+                  type: object
+                type: array
+            required:
+            - workflows
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources: {}

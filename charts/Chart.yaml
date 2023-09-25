@@ -1,0 +1,31 @@
+apiVersion: v2
+appVersion: "0.0.6"
+description: Simple CI/CD operator for Kubernetes. Create workflows that can be trigged by webhooks.
+home: https://github.com/jlsalvador/simple-cicd
+icon: https://raw.githubusercontent.com/jlsalvador/simple-cicd/main/img/logo.png
+keywords:
+  - "cd"
+  - "ci-cd"
+  - "ci"
+  - "cicd"
+  - "controller"
+  - "k8s-controller"
+  - "k8s-operator"
+  - "k8s"
+  - "kubebuilder"
+  - "kubernetes-controller"
+  - "kubernetes-operator"
+  - "kubernetes"
+  - "operator"
+  - "pipeline"
+  - "webhook-server"
+  - "webhook"
+kubeVersion: ">=1.19.0-0"
+maintainers:
+  - name: José Luis Salvador Rufo
+    email: salvador.joseluis@gmail.com
+name: simple-cicd
+sources:
+  - "https://github.com/jlsalvador/simple-cicd"
+type: application
+version: 0.0.1
