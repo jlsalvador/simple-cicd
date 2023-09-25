@@ -24,11 +24,12 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	simplecicdv1alpha1 "github.com/jlsalvador/simple-cicd/api/v1alpha1"
 	listener "github.com/jlsalvador/simple-cicd/internal/workflowWebhookListener"
 )
+
+var wwLog = ctrl.Log.WithName("workflowWebhook controller")
 
 // WorkflowWebhookReconciler reconciles a WorkflowWebhook object
 type WorkflowWebhookReconciler struct {
@@ -46,19 +47,17 @@ type WorkflowWebhookReconciler struct {
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.16.0/pkg/reconcile
 func (r *WorkflowWebhookReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	log := log.FromContext(ctx)
-
 	ww := &simplecicdv1alpha1.WorkflowWebhook{}
 	if err := r.Get(ctx, req.NamespacedName, ww); err != nil {
 		if apierrors.IsNotFound(err) {
-			log.Info(fmt.Sprintf(`unregistering WorkflowWebhook "%s/%s"`, req.Namespace, req.Name))
+			wwLog.Info(fmt.Sprintf(`unregistering WorkflowWebhook "%s/%s"`, req.Namespace, req.Name))
 			listener.UnregisterWebhook(req.Namespace, req.Name)
 			return ctrl.Result{}, nil
 		}
-		log.Error(err, fmt.Sprintf(`can not fetch "%s/%s"`, req.Namespace, req.Name))
+		wwLog.Error(err, fmt.Sprintf(`can not fetch "%s/%s"`, req.Namespace, req.Name))
 		return ctrl.Result{}, err
 	}
-	log.Info(fmt.Sprintf(`registering WorkflowWebhook "%s/%s"`, req.Namespace, req.Name))
+	wwLog.Info(fmt.Sprintf(`registering WorkflowWebhook "%s/%s"`, req.Namespace, req.Name))
 	listener.RegisterWebhook(r.Client, ctx, req.Namespace, req.Name)
 
 	return ctrl.Result{}, nil
