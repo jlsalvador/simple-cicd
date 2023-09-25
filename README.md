@@ -5,6 +5,30 @@
 The Simple CI/CD operator for Kubernetes empowers users to create workflows triggered by webhooks, facilitating the orchestration of Kubernetes Jobs according to specific requirements.
 
 
+## Table of Contents
+1. [Getting Started](#getting-started)
+2. [Description](#description)
+3. [Contributing](#contributing)
+4. [License](#license)
+
+
+## Getting Started
+
+### Installation by Manifest
+
+To install Simple CI/CD directly from the internet, use the following command:
+
+```sh
+kubectl apply -k 'github.com/jlsalvador/simple-cicd/config/default?ref=stable'
+```
+
+If you have forked the Simple CI/CD repository and want to install it from your local copy, use the following command:
+
+```sh
+kubectl apply -k config/default
+```
+
+
 ## Description
 
 Simple CI/CD offers users the ability to trigger Kubernetes Jobs through webhooks, providing control over <ins>when</ins> and <ins>how</ins> multiple Jobs and their dependencies are executed.
@@ -321,14 +345,6 @@ The motivation behind developing Simple CI/CD arises from the need for a tool th
   </tbody>
 </table>
 
-
-## Getting Started
-
-### Installation by Manifest
-
-```sh
-kubectl apply -k config/default
-```
 
 ### Installation by Helm
 
