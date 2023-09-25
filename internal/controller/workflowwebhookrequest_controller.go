@@ -108,6 +108,7 @@ func (r *WorkflowWebhookRequestReconciler) Reconcile(ctx context.Context, req ct
 }
 
 // Fetch the WorkflowWebhookRequest instance
+//
 // The purpose is check if the Custom Resource for the Kind WorkflowWebhookRequest
 // is applied on the cluster if not we return nil to stop the reconciliation
 func (r *WorkflowWebhookRequestReconciler) ensureWorkflowWebhookRequest(ctx context.Context, wwr *simplecicdv1alpha1.WorkflowWebhookRequest, namespacedName types.NamespacedName) error {
@@ -132,7 +133,8 @@ func (r *WorkflowWebhookRequestReconciler) ensureWorkflowWebhookRequest(ctx cont
 	return nil
 }
 
-// If there are not any WorkflowWebhookRequest.Status.Conditions just set a first one as "Progressing"
+// If there are not any WorkflowWebhookRequest.Status.Conditions just set a first
+// one as "Progressing"
 func (r *WorkflowWebhookRequestReconciler) reconcileConditions(ctx context.Context, wwr *simplecicdv1alpha1.WorkflowWebhookRequest) error {
 	if wwr.Status.Conditions != nil {
 		return nil
@@ -213,8 +215,8 @@ func (r *WorkflowWebhookRequestReconciler) reconcileCurrentWorkFlows(ctx context
 	ww := &simplecicdv1alpha1.WorkflowWebhook{}
 	if err := r.Get(ctx, wwr.Spec.WorkflowWebhook.AsType(wwr.Namespace), ww); err != nil {
 		if apierrors.IsNotFound(err) {
-			// If the custom resource is not found then, it usually means that it was deleted or not created
-			// In this way, we will stop the reconciliation
+			// If the custom resource is not found then, it usually means that it
+			// was deleted or not created. In this way, we will stop the reconciliation
 			wwrLog.Info("workflowWebhook resource not found. Ignoring since object must be deleted")
 			return nil
 		}
@@ -306,7 +308,8 @@ func (r *WorkflowWebhookRequestReconciler) reconcileCurrentJobs(ctx context.Cont
 			return false, errors.Join(err, emsg)
 		}
 
-		// Create a Job for each Workflow.Spec.JobsToBeCloned and add ref. into WorkflowWebhookRequest.Spec.CurrentJobs
+		// Create a Job for each Workflow.Spec.JobsToBeCloned and add ref. into
+		// WorkflowWebhookRequest.Spec.CurrentJobs
 		numJobsToBeCloned := len(workflow.Spec.JobsToBeCloned)
 		for i, jnn := range workflow.Spec.JobsToBeCloned {
 			job := &batchv1.Job{}
@@ -409,7 +412,8 @@ func (r *WorkflowWebhookRequestReconciler) reconcileCurrentJobs(ctx context.Cont
 	return true, nil
 }
 
-// If there are some queued Jobs, check its status in order to progress to the next ones.
+// If WorkflowWebhookRequest has some queued Jobs, check their status, requeue it
+// if it is necessary, and progress to the next workflows.
 func (r *WorkflowWebhookRequestReconciler) checkCurrentJobs(ctx context.Context, wwr *simplecicdv1alpha1.WorkflowWebhookRequest) (bool, error) {
 	if len(wwr.Spec.CurrentJobs) == 0 {
 		return false, nil
@@ -531,6 +535,22 @@ func (r *WorkflowWebhookRequestReconciler) checkCurrentJobs(ctx context.Context,
 	return requeue, nil
 }
 
+// Checks whether a given 'when' condition is valid based on the number of
+// successful and failed jobs.
+//
+// Parameters:
+//   - when: The condition to be checked.
+//   - nJobs: The total number of jobs.
+//   - nErrors: The number of jobs that have encountered errors.
+//
+// Returns:
+//   - true if the condition is valid based on the next criteria, otherwise false.
+//
+// The conditions are as follows:
+//   - If 'when' is empty or 'Always', the function always returns true.
+//   - If 'when' is 'OnAnyFailure' or 'OnAnySuccess', it returns true if there are errors (nErrors > 0) but not all jobs have failed (nErrors < nJobs).
+//   - If 'when' is 'OnSuccess' or 'OnAnySuccess', it returns true if there are no errors (nErrors == 0).
+//   - If 'when' is 'OnFailure' or 'OnAnyFailure', it returns true if all jobs have failed (nErrors == nJobs).
 func isConditionWhenValid(when *simplecicdv1alpha1.When, nJobs int, nErrors int) bool {
 	return (when == nil || *when == simplecicdv1alpha1.Always) ||
 		(nErrors > 0 && nErrors < nJobs && (*when == simplecicdv1alpha1.OnAnyFailure || *when == simplecicdv1alpha1.OnAnySuccess)) ||
