@@ -27,7 +27,6 @@ import (
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	simplecicdv1alpha1 "github.com/jlsalvador/simple-cicd/api/v1alpha1"
 	"github.com/jlsalvador/simple-cicd/internal/handler"
@@ -44,41 +43,12 @@ type Webhook struct {
 
 var h = handler.NewHandler()
 
-//+kubebuilder:rbac:groups=simple-cicd.jlsalvador.online,resources=workflowwebhooks,verbs=get;list
-//+kubebuilder:rbac:groups=simple-cicd.jlsalvador.online,resources=workflowwebhooks/status,verbs=get
-
 // Starts WorkflowWebhookListener and blocks until the context is cancelled.
 // Returns an error if there is an error.
 func (wc *Webhook) Start(ctx context.Context) error {
-	log := log.FromContext(ctx)
-
 	if err := http.ListenAndServe(wc.config.Addr, h); err != nil {
 		return err
 	}
-
-	// Fetch all WorkflowWebhook
-	if wc.config.Client == nil {
-		return errors.New("unexpected value. Config.Client is nil")
-	}
-	wwl := &simplecicdv1alpha1.WorkflowWebhookList{}
-	if err := wc.config.Client.List(ctx, wwl, nil); err != nil {
-		emsg := "can not list all workflowWebhook"
-		err := errors.Join(err, errors.New(emsg))
-		log.Error(err, emsg)
-		return err
-	}
-
-	// Call RegisterWebhook for each WorkflowWebhook
-	for _, ww := range wwl.Items {
-		log.Info(
-			"Registered WorkflowWebhook for requests",
-			"WorkflowWebhook", ww,
-			"Spec", ww.Spec,
-			"Status", ww.Status,
-		)
-		RegisterWebhook(wc.config.Client, ctx, ww.Namespace, ww.Name)
-	}
-
 	return nil
 }
 
