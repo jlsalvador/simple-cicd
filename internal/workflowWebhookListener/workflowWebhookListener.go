@@ -18,6 +18,7 @@ package workflowWebhookListener
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -137,7 +138,13 @@ func webhookHandler(c client.Client, ctx context.Context, w http.ResponseWriter,
 		return
 	}
 
-	w.WriteHeader(http.StatusAccepted)
+	// Write WorkflowWebhookRequest NamespacedName as HTTP response
+	w.WriteHeader(http.StatusCreated)
+	payload := simplecicdv1alpha1.NamespacedName{
+		Namespace: &wwr.Namespace,
+		Name:      wwr.Name,
+	}
+	json.NewEncoder(w).Encode(payload)
 }
 
 func getWorkflowWebhookFromPath(c client.Client, ctx context.Context, path string) (*simplecicdv1alpha1.WorkflowWebhook, error) {
