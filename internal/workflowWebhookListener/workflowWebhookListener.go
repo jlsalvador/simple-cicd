@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"regexp"
 
@@ -47,9 +48,18 @@ var h = handler.NewHandler()
 // Starts WorkflowWebhookListener and blocks until the context is cancelled.
 // Returns an error if there is an error.
 func (wc *Webhook) Start(ctx context.Context) error {
-	if err := http.ListenAndServe(wc.config.Addr, h); err != nil {
+	// Create listener (with our custom Context) for HTTP server
+	var lc = net.ListenConfig{}
+	ln, err := lc.Listen(ctx, "tcp", wc.config.Addr)
+	if err != nil {
 		return err
 	}
+
+	// Start HTTP server
+	if err := http.Serve(ln, h); err != nil {
+		return err
+	}
+
 	return nil
 }
 
