@@ -170,6 +170,6 @@ $(ENVTEST): $(LOCALBIN)
 	test -s $(LOCALBIN)/setup-envtest || GOBIN=$(LOCALBIN) go install sigs.k8s.io/controller-runtime/tools/setup-envtest@$(ENVTEST_VERSION)
 
 .PHONY: gocyclo
-gocyclo: $(GOCYCLO) ## Download gocyclo
+gocyclo: $(GOCYCLO) ## Download gocyclo locally if necessary.
 $(GOCYCLO): $(LOCALBIN)
 	test -s $(LOCALBIN)/gocyclo || GOBIN=$(LOCALBIN) go install github.com/fzipp/gocyclo/cmd/gocyclo@$(GOCYCLO_VERSION)
