@@ -31,7 +31,10 @@ type NamespacedName struct {
 }
 
 func (nn NamespacedName) String() string {
-	return fmt.Sprintf("%s/%s", *nn.Namespace, nn.Name)
+	if nn.Namespace != nil {
+		return fmt.Sprintf("%s/%s", *nn.Namespace, nn.Name)
+	}
+	return nn.Name
 }
 
 func (nn NamespacedName) AsType(defaultNamespace string) types.NamespacedName {

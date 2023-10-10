@@ -11,6 +11,8 @@ spec:
     kind: Workflow
     listKind: WorkflowList
     plural: workflows
+    shortNames:
+    - w
     singular: workflow
   scope: Namespaced
   versions:

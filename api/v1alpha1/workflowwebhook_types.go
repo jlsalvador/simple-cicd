@@ -34,6 +34,7 @@ type WorkflowWebhookStatus struct {
 //+kubebuilder:subresource:status
 
 // WorkflowWebhook is the Schema for the workflowwebhooks API
+// +kubebuilder:resource:shortName=ww
 type WorkflowWebhook struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

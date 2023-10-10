@@ -71,6 +71,7 @@ type NextWorkflow struct {
 	//   - OnAnyFailure: The Job will be handled when any previous Job was not successful.
 	//   - Always: The Job will always be handled.
 	//
+	// +default="Always"
 	// +optional
 	When *When `json:"when,omitempty"`
 }
@@ -80,7 +81,10 @@ func (nw NextWorkflow) String() string {
 	if nw.When != nil {
 		when = *nw.When
 	}
-	return fmt.Sprintf("%s/%s@%s", *nw.Namespace, nw.Name, when)
+	if nw.Namespace != nil {
+		return fmt.Sprintf("%s/%s@%s", *nw.Namespace, nw.Name, when)
+	}
+	return fmt.Sprintf("%s@%s", nw.Name, when)
 }
 
 func (nw NextWorkflow) AsNamespacedName() NamespacedName {
@@ -115,6 +119,7 @@ type WorkflowStatus struct {
 //+kubebuilder:subresource:status
 
 // Workflow is the Schema for the workflows API
+// +kubebuilder:resource:shortName=w
 type Workflow struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

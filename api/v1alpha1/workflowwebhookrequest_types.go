@@ -72,11 +72,33 @@ type WorkflowWebhookRequestSpec struct {
 	// When set to true, instructs the operator to skip
 	// this WorkflowWebhookRequest during future reconciliations.
 	// +optional
-	Done bool `json:"done,omitempty"`
+	Done bool `json:"done"`
+}
+
+type ConditionStatus string
+
+// These are valid condition statuses. "ConditionTrue" means a resource is in the condition.
+// "ConditionFalse" means a resource is not in the condition. "ConditionUnknown" means kubernetes
+// can't decide if a resource is in the condition or not.
+const (
+	ConditionTrue    ConditionStatus = "True"
+	ConditionFalse   ConditionStatus = "False"
+	ConditionUnknown ConditionStatus = "Unknown"
+)
+
+type Condition struct {
+	Type               string          `json:"type"`
+	Status             ConditionStatus `json:"status"`
+	Reason             string          `json:"reason"`
+	Message            string          `json:"message"`
+	LastTransitionTime metav1.Time     `json:"lastTransitionTime"`
 }
 
 // WorkflowWebhookRequestStatus defines the observed state of WorkflowWebhookRequest
 type WorkflowWebhookRequestStatus struct {
+	// String representation of the current Jobs
+	CurrentJobs string `json:"currentJobs,omitempty"`
+
 	// Represents the observations of a WorkflowWebhookRequestStatus's current state.
 	// WorkflowWebhookRequestStatus.Status.Conditions.Type are: "Progressing", "Waiting", "Done"
 	// WorkflowWebhookRequestStatus.Status.Conditions.Status are one of True, False, Unknown.
@@ -87,14 +109,15 @@ type WorkflowWebhookRequestStatus struct {
 	// For further information see: https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md#typical-status-properties
 	//
 	// Conditions store the status conditions of the WorkflowWebhookRequestStatus instances
-	// +operator-sdk:csv:customresourcedefinitions:type=status
-	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type" protobuf:"bytes,1,rep,name=conditions"`
+	Conditions []Condition `json:"conditions,omitempty"`
 }
 
 //+kubebuilder:object:root=true
-//+kubebuilder:subresource:status
 
 // WorkflowWebhookRequest is the Schema for the workflowwebhookrequests API
+// +kubebuilder:resource:shortName=wwr
+// +kubebuilder:printcolumn:name="Done",type="boolean",JSONPath=`.spec.done`
+// +kubebuilder:printcolumn:name="Current Jobs",type=string,JSONPath=`.status.currentJobs`
 type WorkflowWebhookRequest struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
