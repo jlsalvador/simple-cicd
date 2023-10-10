@@ -34,7 +34,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	simplecicdv1alpha1 "github.com/jlsalvador/simple-cicd/api/v1alpha1"
-	"github.com/jlsalvador/simple-cicd/internal/common"
 	"github.com/jlsalvador/simple-cicd/internal/rfc1123"
 )
 
@@ -52,13 +51,10 @@ type WorkflowWebhookRequestReconciler struct {
 }
 
 //+kubebuilder:rbac:groups=simple-cicd.jlsalvador.online,resources=workflowwebhookrequests,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=simple-cicd.jlsalvador.online,resources=workflowwebhookrequests/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=simple-cicd.jlsalvador.online,resources=workflowwebhookrequests/finalizers,verbs=update
 //+kubebuilder:rbac:groups=simple-cicd.jlsalvador.online,resources=workflowwebhooks,verbs=get;list
-//+kubebuilder:rbac:groups=simple-cicd.jlsalvador.online,resources=workflowwebhooks/status,verbs=get;list
 //+kubebuilder:rbac:groups=simple-cicd.jlsalvador.online,resources=workflowwebhooks/finalizers,verbs=update
 //+kubebuilder:rbac:groups=simple-cicd.jlsalvador.online,resources=workflows,verbs=get;list;watch
-//+kubebuilder:rbac:groups=simple-cicd.jlsalvador.online,resources=workflows/status,verbs=get;list
 //+kubebuilder:rbac:groups=simple-cicd.jlsalvador.online,resources=workflows/finalizers,verbs=update
 //+kubebuilder:rbac:groups=batch,resources=jobs,verbs=get;list;watch;create
 //+kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch;create
@@ -78,7 +74,7 @@ func (r *WorkflowWebhookRequestReconciler) Reconcile(ctx context.Context, req ct
 	}
 
 	// If this WorkflowWebhookRequest is Done, do nothing
-	if wwr.Spec.Done {
+	if wwr.Status.Done {
 		return ctrl.Result{}, nil
 	}
 
@@ -195,7 +191,7 @@ func (r *WorkflowWebhookRequestReconciler) ensureSecret(ctx context.Context, wwr
 
 // Let's just fill the Status.CurrentWorkflows when it is not available
 func (r *WorkflowWebhookRequestReconciler) reconcileCurrentWorkFlows(ctx context.Context, wwr *simplecicdv1alpha1.WorkflowWebhookRequest) error {
-	if wwr.Spec.CurrentWorkflows != nil {
+	if wwr.Status.CurrentWorkflows != nil {
 		return nil
 	}
 
@@ -215,7 +211,7 @@ func (r *WorkflowWebhookRequestReconciler) reconcileCurrentWorkFlows(ctx context
 	}
 	wwrLog.Info("WorkflowWebhook fetched", "WorkflowWebhook", ww)
 
-	wwr.Spec.CurrentWorkflows = ww.Spec.Workflows
+	wwr.Status.CurrentWorkflows = ww.Spec.Workflows
 
 	if err := r.updateWwr(ctx, wwr); err != nil {
 		return err
@@ -225,11 +221,11 @@ func (r *WorkflowWebhookRequestReconciler) reconcileCurrentWorkFlows(ctx context
 
 // Let's just fill the Spec.NextWorkflows when it is not available
 func (r *WorkflowWebhookRequestReconciler) reconcileNextWorkflows(ctx context.Context, wwr *simplecicdv1alpha1.WorkflowWebhookRequest) error {
-	if wwr.Spec.NextWorkflows != nil {
+	if wwr.Status.NextWorkflows != nil {
 		return nil
 	}
 
-	for _, workflowNamespacedName := range wwr.Spec.CurrentWorkflows {
+	for _, workflowNamespacedName := range wwr.Status.CurrentWorkflows {
 		w := &simplecicdv1alpha1.Workflow{}
 		if err := r.Get(ctx, workflowNamespacedName.AsType(wwr.Namespace), w); err != nil {
 			emsg := fmt.Errorf("can not fetch Workflow %s", workflowNamespacedName)
@@ -240,7 +236,7 @@ func (r *WorkflowWebhookRequestReconciler) reconcileNextWorkflows(ctx context.Co
 			continue
 		}
 		wwrLog.Info("Append to WorkflowWebhookRequest.Spec.NextWorkflows", "Workflow", w.Spec.Next)
-		wwr.Spec.NextWorkflows = append(wwr.Spec.NextWorkflows, w.Spec.Next...)
+		wwr.Status.NextWorkflows = append(wwr.Status.NextWorkflows, w.Spec.Next...)
 	}
 
 	if err := r.updateWwr(ctx, wwr); err != nil {
@@ -251,12 +247,12 @@ func (r *WorkflowWebhookRequestReconciler) reconcileNextWorkflows(ctx context.Co
 
 // Let's just fill the Spec.CurrentJobs
 func (r *WorkflowWebhookRequestReconciler) reconcileCurrentJobs(ctx context.Context, wwr *simplecicdv1alpha1.WorkflowWebhookRequest, secret *corev1.Secret) (bool, error) {
-	if wwr.Spec.CurrentJobs != nil {
+	if wwr.Status.CurrentJobs != nil {
 		return false, nil
 	}
 
 	// Create Jobs from each WorkflowWebhook.Spec.Workflows
-	for _, workflowNamespacedName := range wwr.Spec.CurrentWorkflows {
+	for _, workflowNamespacedName := range wwr.Status.CurrentWorkflows {
 
 		// Fetch Workflow to fetch its jobs to be cloned
 		workflow := &simplecicdv1alpha1.Workflow{}
@@ -325,7 +321,7 @@ func (r *WorkflowWebhookRequestReconciler) reconcileCurrentJobs(ctx context.Cont
 				wwrLog.Info("New Job created", "Job", newJobNamespacedName)
 			}
 
-			wwr.Spec.CurrentJobs = append(wwr.Spec.CurrentJobs, newJobNamespacedName)
+			wwr.Status.CurrentJobs = append(wwr.Status.CurrentJobs, newJobNamespacedName)
 			wwrLog.Info("Added Job", "Job", newJobNamespacedName)
 
 		} // End JobToBeCloned
@@ -351,13 +347,13 @@ func (r *WorkflowWebhookRequestReconciler) reconcileCurrentJobs(ctx context.Cont
 // If WorkflowWebhookRequest has some queued Jobs, check their status, requeue it
 // if it is necessary, and progress to the next workflows.
 func (r *WorkflowWebhookRequestReconciler) checkCurrentJobs(ctx context.Context, wwr *simplecicdv1alpha1.WorkflowWebhookRequest) (bool, error) {
-	if len(wwr.Spec.CurrentJobs) == 0 {
+	if len(wwr.Status.CurrentJobs) == 0 {
 		return false, nil
 	}
 
-	numJobs := len(wwr.Spec.CurrentJobs) // Save this value for later because we will empty WrokflowWebhookRequest.Spec.CurrentJobs
+	numJobs := len(wwr.Status.CurrentJobs) // Save this value for later because we will empty WrokflowWebhookRequest.Spec.CurrentJobs
 	numErrors := 0
-	for _, jobNamespacedName := range wwr.Spec.CurrentJobs {
+	for _, jobNamespacedName := range wwr.Status.CurrentJobs {
 
 		job := &batchv1.Job{}
 		if err := r.Get(ctx, jobNamespacedName.AsType(wwr.Namespace), job); err != nil {
@@ -378,30 +374,30 @@ func (r *WorkflowWebhookRequestReconciler) checkCurrentJobs(ctx context.Context,
 	}
 
 	// Empty current Jobs
-	wwr.Spec.CurrentJobs = []simplecicdv1alpha1.NamespacedName{}
+	wwr.Status.CurrentJobs = []simplecicdv1alpha1.NamespacedName{}
 
 	// Empty current Workflows
-	wwr.Spec.CurrentWorkflows = []simplecicdv1alpha1.NamespacedName{}
+	wwr.Status.CurrentWorkflows = []simplecicdv1alpha1.NamespacedName{}
 
 	// Set next Workflows as current Workflows
-	for _, nextWorkflowNamespacedName := range wwr.Spec.NextWorkflows {
+	for _, nextWorkflowNamespacedName := range wwr.Status.NextWorkflows {
 		if isConditionWhenValid(nextWorkflowNamespacedName.When, numJobs, numErrors) {
 			// Add next workflow as current
-			wwr.Spec.CurrentWorkflows = append(wwr.Spec.CurrentWorkflows, nextWorkflowNamespacedName.AsNamespacedName())
+			wwr.Status.CurrentWorkflows = append(wwr.Status.CurrentWorkflows, nextWorkflowNamespacedName.AsNamespacedName())
 		}
 	}
 
 	// Empty next Workflows
-	wwr.Spec.NextWorkflows = []simplecicdv1alpha1.NextWorkflow{}
+	wwr.Status.NextWorkflows = []simplecicdv1alpha1.NextWorkflow{}
 
 	// Check if there are more Workflows to process or if the WorkflowWebhookRequest is done
 	var requeue bool
 	var newCondition simplecicdv1alpha1.Condition
-	numWorkflows := len(wwr.Spec.CurrentWorkflows)
+	numWorkflows := len(wwr.Status.CurrentWorkflows)
 	if numWorkflows == 0 {
 		// Do not requeue WorkflowWebhookRequest, there are not more Workflows
 		requeue = false
-		wwr.Spec.Done = true // This WorkflowWebhookRequest is Done, no more Workflows
+		wwr.Status.Done = true // This WorkflowWebhookRequest is Done, no more Workflows
 
 		newCondition = simplecicdv1alpha1.Condition{
 			Type:               string(simplecicdv1alpha1.WorkflowWebhookRequestDone),
@@ -435,7 +431,6 @@ func (r *WorkflowWebhookRequestReconciler) checkCurrentJobs(ctx context.Context,
 
 // Update WorkflowWebhookRequest and its .Status subresource
 func (r *WorkflowWebhookRequestReconciler) updateWwr(ctx context.Context, wwr *simplecicdv1alpha1.WorkflowWebhookRequest) error {
-	wwr.Status.CurrentJobs = common.JoinAsString(wwr.Spec.CurrentJobs, " ")
 	if err := r.Update(ctx, wwr); err != nil {
 		wwrLog.Error(err, "Failed to update WorkflowWebhookRequest.Spec.CurrentWorkflows")
 		return err

@@ -56,23 +56,6 @@ type WorkflowWebhookRequestSpec struct {
 	// Described in https://tools.ietf.org/html/rfc4648#section-4
 	// +optional
 	Body []byte `json:"body,omitempty" protobuf:"bytes,2,rep,name=body"`
-
-	// List of Jobs running associated with current Workflows triggered.
-	// +optional
-	CurrentJobs []NamespacedName `json:"currentJobs,omitempty"`
-
-	// List of Workflows currently triggered.
-	// +optional
-	CurrentWorkflows []NamespacedName `json:"currentWorkflows,omitempty"`
-
-	// List of the next Workflows to be triggered.
-	// +optional
-	NextWorkflows []NextWorkflow `json:"nextWorkflows,omitempty"`
-
-	// When set to true, instructs the operator to skip
-	// this WorkflowWebhookRequest during future reconciliations.
-	// +optional
-	Done bool `json:"done"`
 }
 
 type ConditionStatus string
@@ -96,8 +79,22 @@ type Condition struct {
 
 // WorkflowWebhookRequestStatus defines the observed state of WorkflowWebhookRequest
 type WorkflowWebhookRequestStatus struct {
-	// String representation of the current Jobs
-	CurrentJobs string `json:"currentJobs,omitempty"`
+	// List of Jobs running associated with current Workflows triggered.
+	// +optional
+	CurrentJobs []NamespacedName `json:"currentJobs,omitempty"`
+
+	// List of Workflows currently triggered.
+	// +optional
+	CurrentWorkflows []NamespacedName `json:"currentWorkflows,omitempty"`
+
+	// List of the next Workflows to be triggered.
+	// +optional
+	NextWorkflows []NextWorkflow `json:"nextWorkflows,omitempty"`
+
+	// When set to true, instructs the operator to skip
+	// this WorkflowWebhookRequest during future reconciliations.
+	// +optional
+	Done bool `json:"done"`
 
 	// Represents the observations of a WorkflowWebhookRequestStatus's current state.
 	// WorkflowWebhookRequestStatus.Status.Conditions.Type are: "Progressing", "Waiting", "Done"
@@ -116,7 +113,7 @@ type WorkflowWebhookRequestStatus struct {
 
 // WorkflowWebhookRequest is the Schema for the workflowwebhookrequests API
 // +kubebuilder:resource:shortName=wwr
-// +kubebuilder:printcolumn:name="Done",type="boolean",JSONPath=`.spec.done`
+// +kubebuilder:printcolumn:name="Done",type="boolean",JSONPath=`.status.done`
 // +kubebuilder:printcolumn:name="Current Jobs",type=string,JSONPath=`.status.currentJobs`
 type WorkflowWebhookRequest struct {
 	metav1.TypeMeta   `json:",inline"`

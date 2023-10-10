@@ -26,12 +26,7 @@ type WorkflowWebhookSpec struct {
 	Workflows []NamespacedName `json:"workflows"`
 }
 
-// WorkflowWebhookStatus defines the observed state of WorkflowWebhook
-type WorkflowWebhookStatus struct {
-}
-
 //+kubebuilder:object:root=true
-//+kubebuilder:subresource:status
 
 // WorkflowWebhook is the Schema for the workflowwebhooks API
 // +kubebuilder:resource:shortName=ww
@@ -39,8 +34,7 @@ type WorkflowWebhook struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   WorkflowWebhookSpec   `json:"spec,omitempty"`
-	Status WorkflowWebhookStatus `json:"status,omitempty"`
+	Spec WorkflowWebhookSpec `json:"spec,omitempty"`
 }
 
 //+kubebuilder:object:root=true

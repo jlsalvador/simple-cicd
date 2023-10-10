@@ -38,7 +38,6 @@ type WorkflowWebhookReconciler struct {
 }
 
 //+kubebuilder:rbac:groups=simple-cicd.jlsalvador.online,resources=workflowwebhooks,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=simple-cicd.jlsalvador.online,resources=workflowwebhooks/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=simple-cicd.jlsalvador.online,resources=workflowwebhooks/finalizers,verbs=update
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to

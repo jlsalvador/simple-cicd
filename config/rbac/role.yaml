@@ -39,13 +39,6 @@ rules:
 - apiGroups:
   - simple-cicd.jlsalvador.online
   resources:
-  - workflows/status
-  verbs:
-  - get
-  - list
-- apiGroups:
-  - simple-cicd.jlsalvador.online
-  resources:
   - workflowwebhookrequests
   verbs:
   - create
@@ -64,14 +57,6 @@ rules:
 - apiGroups:
   - simple-cicd.jlsalvador.online
   resources:
-  - workflowwebhookrequests/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - simple-cicd.jlsalvador.online
-  resources:
   - workflowwebhooks
   verbs:
   - create
@@ -86,13 +71,4 @@ rules:
   resources:
   - workflowwebhooks/finalizers
   verbs:
-  - update
-- apiGroups:
-  - simple-cicd.jlsalvador.online
-  resources:
-  - workflowwebhooks/status
-  verbs:
-  - get
-  - list
-  - patch
   - update

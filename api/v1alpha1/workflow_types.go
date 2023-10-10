@@ -109,14 +109,7 @@ type WorkflowSpec struct {
 	Suspend *bool `json:"suspend,omitempty" protobuf:"varint,10,opt,name=suspend"`
 }
 
-// WorkflowStatus defines the observed state of Workflow
-type WorkflowStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-}
-
 //+kubebuilder:object:root=true
-//+kubebuilder:subresource:status
 
 // Workflow is the Schema for the workflows API
 // +kubebuilder:resource:shortName=w
@@ -124,8 +117,7 @@ type Workflow struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   WorkflowSpec   `json:"spec,omitempty"`
-	Status WorkflowStatus `json:"status,omitempty"`
+	Spec WorkflowSpec `json:"spec,omitempty"`
 }
 
 //+kubebuilder:object:root=true
