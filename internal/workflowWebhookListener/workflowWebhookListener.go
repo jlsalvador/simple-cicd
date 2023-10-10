@@ -28,6 +28,7 @@ import (
 
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	simplecicdv1alpha1 "github.com/jlsalvador/simple-cicd/api/v1alpha1"
@@ -43,11 +44,13 @@ type Webhook struct {
 	config Config
 }
 
+var log = ctrl.Log.WithName("workflowWebhook listener")
 var h = handler.NewHandler()
 
 // Starts WorkflowWebhookListener and blocks until the context is cancelled.
 // Returns an error if there is an error.
-func (wc *Webhook) Start(ctx context.Context) error {
+func (wc *Webhook) Start(ctx context.Context, cancel context.CancelCauseFunc) error {
+
 	// Create listener (with our custom Context) for HTTP server
 	var lc = net.ListenConfig{}
 	ln, err := lc.Listen(ctx, "tcp", wc.config.Addr)
@@ -56,11 +59,21 @@ func (wc *Webhook) Start(ctx context.Context) error {
 	}
 
 	// Start HTTP server
-	if err := http.Serve(ln, h); err != nil {
-		return err
+	h := &http.Server{
+		Addr:    wc.config.Addr,
+		Handler: h,
 	}
+	go func() {
+		log.Info("listening for WorkflowWebhooks", "address", wc.config.Addr)
+		if err := h.Serve(ln); err != nil {
+			cancel(err)
+		}
+	}()
 
-	return nil
+	// Wait until context is Done
+	<-ctx.Done()
+	log.Info("shutting down listener for WorkflowWebhooks", "address", wc.config.Addr)
+	return h.Shutdown(ctx)
 }
 
 func New(config *Config) (*Webhook, error) {

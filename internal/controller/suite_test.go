@@ -18,6 +18,7 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"runtime"
@@ -47,7 +48,7 @@ var (
 	k8sClient client.Client
 	testEnv   *envtest.Environment
 	ctx       context.Context
-	cancel    context.CancelFunc
+	cancel    context.CancelCauseFunc
 )
 
 func TestControllers(t *testing.T) {
@@ -59,7 +60,7 @@ func TestControllers(t *testing.T) {
 var _ = BeforeSuite(func() {
 	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 
-	ctx, cancel = context.WithCancel(context.TODO())
+	ctx, cancel = context.WithCancelCause(context.TODO())
 
 	By("bootstrapping test environment")
 	testEnv = &envtest.Environment{
@@ -121,13 +122,13 @@ var _ = BeforeSuite(func() {
 	}()
 	go func() {
 		defer GinkgoRecover()
-		err = wh.Start(ctx)
+		err = wh.Start(ctx, cancel)
 		Expect(err).ToNot(HaveOccurred(), "failed to run listener")
 	}()
 })
 
 var _ = AfterSuite(func() {
-	cancel()
+	cancel(errors.New(""))
 	By("tearing down the test environment")
 	err := testEnv.Stop()
 	Expect(err).NotTo(HaveOccurred())

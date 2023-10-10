@@ -111,7 +111,7 @@ func main() {
 	//+kubebuilder:scaffold:builder
 
 	var wg sync.WaitGroup
-	ctx, cancelCtx := context.WithCancelCause(ctrl.SetupSignalHandler())
+	ctx, cancel := context.WithCancelCause(ctrl.SetupSignalHandler())
 
 	// Webhook thread
 	wg.Add(1)
@@ -124,13 +124,13 @@ func main() {
 		})
 		if err != nil {
 			setupLog.Error(err, "unable to start listener")
-			cancelCtx(err)
+			cancel(err)
 		}
 
 		setupLog.Info("starting listener")
-		if err := wh.Start(ctx); err != nil {
+		if err := wh.Start(ctx, cancel); err != nil {
 			setupLog.Error(err, "problem running webhook")
-			cancelCtx(err)
+			cancel(err)
 		}
 	}()
 
@@ -141,17 +141,17 @@ func main() {
 
 		if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
 			setupLog.Error(err, "unable to set up health check")
-			cancelCtx(err)
+			cancel(err)
 		}
 		if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
 			setupLog.Error(err, "unable to set up ready check")
-			cancelCtx(err)
+			cancel(err)
 		}
 
 		setupLog.Info("starting manager")
 		if err := mgr.Start(ctx); err != nil {
 			setupLog.Error(err, "problem running manager")
-			cancelCtx(err)
+			cancel(err)
 		}
 	}()
 
