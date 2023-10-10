@@ -64,6 +64,10 @@ vet: ## Run go vet against code.
 cyclo: gocyclo ## Run gocyclo against code.
 	$(GOCYCLO) -over 15 .
 
+.PHONY: cyclo-report
+cyclo-report: gocyclo ## Report gocyclo against code.
+	$(GOCYCLO) -top 15 .
+
 .PHONY: test
 test: manifests generate fmt vet cyclo envtest ## Run tests.
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test ./... -coverprofile cover.out
