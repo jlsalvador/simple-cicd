@@ -145,7 +145,7 @@ var _ = Describe("WorkflowWebhookRequest controller", func() {
 			Namespace: namespace,
 		},
 		Spec: simplecicdv1alpha1.WorkflowSpec{
-			JobsToBeCloned: []simplecicdv1alpha1.NamespacedName{
+			JobsToBeCloned: []simplecicdv1alpha1.JobsToBeCloned{
 				{Name: jobCatRequest.ObjectMeta.Name},
 			},
 		},
@@ -160,7 +160,7 @@ var _ = Describe("WorkflowWebhookRequest controller", func() {
 			Namespace: namespace,
 		},
 		Spec: simplecicdv1alpha1.WorkflowSpec{
-			JobsToBeCloned: []simplecicdv1alpha1.NamespacedName{
+			JobsToBeCloned: []simplecicdv1alpha1.JobsToBeCloned{
 				{Name: jobSuccess.ObjectMeta.Name},
 				{Name: jobSuccess.ObjectMeta.Name},
 			},
@@ -179,7 +179,7 @@ var _ = Describe("WorkflowWebhookRequest controller", func() {
 			Namespace: namespace,
 		},
 		Spec: simplecicdv1alpha1.WorkflowSpec{
-			JobsToBeCloned: []simplecicdv1alpha1.NamespacedName{
+			JobsToBeCloned: []simplecicdv1alpha1.JobsToBeCloned{
 				{Name: jobFailure.ObjectMeta.Name},
 				{Name: jobFailure.ObjectMeta.Name},
 			},
@@ -198,7 +198,7 @@ var _ = Describe("WorkflowWebhookRequest controller", func() {
 			Namespace: namespace,
 		},
 		Spec: simplecicdv1alpha1.WorkflowSpec{
-			JobsToBeCloned: []simplecicdv1alpha1.NamespacedName{
+			JobsToBeCloned: []simplecicdv1alpha1.JobsToBeCloned{
 				{Name: jobSuccess.ObjectMeta.Name},
 				{Name: jobFailure.ObjectMeta.Name},
 			},

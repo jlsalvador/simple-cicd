@@ -28,18 +28,29 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	simplecicdv1alpha1 "github.com/jlsalvador/simple-cicd/api/v1alpha1"
+	"github.com/jlsalvador/simple-cicd/internal/common"
 	"github.com/jlsalvador/simple-cicd/internal/rfc1123"
 )
 
 const (
 	// Duration to the next reconciliation.
 	requeueAfter = time.Millisecond * 500 // 0.5s
+)
+
+var (
+	LabelWorkflowWebhookNamespace = simplecicdv1alpha1.GroupVersion.Group + "/from-workflowWebhook-namespace"
+	LabelWorkflowWebhookName      = simplecicdv1alpha1.GroupVersion.Group + "/from-workflowWebhook-name"
+	LabelWorkFlowNamespace        = simplecicdv1alpha1.GroupVersion.Group + "/from-workflow-namespace"
+	LabelWorkFlowName             = simplecicdv1alpha1.GroupVersion.Group + "/from-workflow-name"
+	LabelJobNamespace             = simplecicdv1alpha1.GroupVersion.Group + "/from-job-namespace"
+	LabelJobName                  = simplecicdv1alpha1.GroupVersion.Group + "/from-job-name"
 )
 
 var wwrLog = ctrl.Log.WithName("workflowWebhookRequest controller")
@@ -271,63 +282,11 @@ func (r *WorkflowWebhookRequestReconciler) reconcileCurrentJobs(ctx context.Cont
 		// WorkflowWebhookRequest.Spec.CurrentJobs
 		numJobsToBeCloned := len(workflow.Spec.JobsToBeCloned)
 		for i, jnn := range workflow.Spec.JobsToBeCloned {
-			job := &batchv1.Job{}
-			if err := r.Get(ctx, jnn.AsType(wwr.Namespace), job); err != nil {
-				emsg := fmt.Errorf(`can not fetch Job "%s"`, jnn)
-				wwrLog.Error(err, emsg.Error())
-				return false, errors.Join(err, emsg)
+			// Clone as a new Job from suspended Job.
+			err := r.createJob(ctx, jnn, wwr, workflow, numJobsToBeCloned, i, secret)
+			if err != nil {
+				return false, err
 			}
-			wwrLog.Info("Fetch Job to be cloned", "Job", job)
-
-			// Generate new Job NamespacedName
-			var fullUnsafeName string
-			wwrUid := strings.ReplaceAll(string(wwr.GetUID()), "-", "")
-			if numJobsToBeCloned == 1 {
-				fullUnsafeName = fmt.Sprintf("%s-%s-%s", wwr.Name, job.Name, wwrUid)
-			} else {
-				fullUnsafeName = fmt.Sprintf("%s-%s-%d-%s", wwr.Name, job.Name, i, wwrUid)
-			}
-			newJobNamespacedName := simplecicdv1alpha1.NamespacedName{
-				Namespace: &workflow.Namespace,
-				Name:      rfc1123.GenerateSafeLengthName(fullUnsafeName),
-			}
-
-			// Check if the Job already exists
-			newJob := &batchv1.Job{}
-			if err := r.Get(ctx, newJobNamespacedName.AsType(wwr.Namespace), newJob); err != nil {
-				if !apierrors.IsNotFound(err) {
-					emsg := fmt.Errorf(`can not fetch Job %q`, newJobNamespacedName)
-					wwrLog.Error(err, emsg.Error())
-					return false, errors.Join(err, emsg)
-				}
-
-				// New Job not found, create it
-				// Clone job with Job.Spec.Suspend = false
-				newJob = cloneJob(job, newJobNamespacedName)
-
-				// Append Secret volume to Job containers
-				appendSecretVolumeToJobContainers(newJob, *secret)
-
-				// Set the ownerRef for the Job
-				// More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/owners-dependents/
-				if err := ctrl.SetControllerReference(wwr, newJob, r.Scheme); err != nil {
-					emsg := fmt.Errorf(`can not set reference for Job %s/%s as %s/%s`, *jnn.Namespace, jnn.Name, wwr.Namespace, wwr.Name)
-					wwrLog.Error(err, emsg.Error())
-					return false, errors.Join(err, emsg)
-				}
-				wwrLog.Info("New Job to be created", "Job", newJob)
-
-				// Create new Job
-				if err := r.Create(ctx, newJob); err != nil {
-					emsg := fmt.Errorf(`can not create new Job "%s/%s" from Job "%s/%s"`, newJob.Namespace, newJob.Name, job.Namespace, job.Name)
-					wwrLog.Error(err, emsg.Error())
-					return false, errors.Join(err, emsg)
-				}
-				wwrLog.Info("New Job created", "Job", newJobNamespacedName)
-			}
-
-			wwr.Status.CurrentJobs = append(wwr.Status.CurrentJobs, newJobNamespacedName)
-			wwrLog.Info("Added Job", "Job", newJobNamespacedName)
 
 		} // End JobToBeCloned
 
@@ -347,6 +306,143 @@ func (r *WorkflowWebhookRequestReconciler) reconcileCurrentJobs(ctx context.Cont
 
 	// Stop here and check again after a bit
 	return true, nil
+}
+
+func (r *WorkflowWebhookRequestReconciler) createJob(
+	ctx context.Context,
+	jnn simplecicdv1alpha1.JobsToBeCloned,
+	wwr *simplecicdv1alpha1.WorkflowWebhookRequest,
+	workflow *simplecicdv1alpha1.Workflow,
+	numJobsToBeCloned int,
+	i int,
+	secret *corev1.Secret,
+) error {
+	// Ensure job.Namespace
+	ns := common.DefaultString(jnn.Namespace, wwr.Namespace)
+	jnn.Namespace = &ns
+
+	// Create new labels
+	newLabels := getLabels(
+		*jnn.Namespace,
+		jnn.Name,
+		workflow.Namespace,
+		workflow.Name,
+		common.DefaultString(wwr.Spec.WorkflowWebhook.Namespace, wwr.Namespace),
+		wwr.Spec.WorkflowWebhook.Name,
+		wwr.Namespace,
+	)
+
+	// Check ConcurrencyPolicy
+	if skip, err := r.checkConcurrencyPolicy(ctx, jnn, newLabels); err != nil {
+		emsg := errors.New("error while checking ConcurrencyPolicy")
+		wwrLog.Error(err, emsg.Error())
+		return errors.Join(err, emsg)
+	} else if skip {
+		return nil
+	}
+
+	job := &batchv1.Job{}
+	if err := r.Get(ctx, types.NamespacedName{
+		Namespace: *jnn.Namespace,
+		Name:      jnn.Name,
+	}, job); err != nil {
+		emsg := fmt.Errorf(`can not fetch Job "%s"`, jnn.String())
+		wwrLog.Error(err, emsg.Error())
+		return errors.Join(err, emsg)
+	}
+	wwrLog.Info("Fetch Job to be cloned", "Job", job)
+
+	// Generate new Job NamespacedName
+	var fullUnsafeName string
+	wwrUid := strings.ReplaceAll(string(wwr.GetUID()), "-", "")
+	if numJobsToBeCloned == 1 {
+		fullUnsafeName = fmt.Sprintf("%s-%s-%s", wwr.Name, job.Name, wwrUid)
+	} else {
+		fullUnsafeName = fmt.Sprintf("%s-%s-%d-%s", wwr.Name, job.Name, i, wwrUid)
+	}
+	newJobNamespacedName := simplecicdv1alpha1.NamespacedName{
+		Namespace: &workflow.Namespace,
+		Name:      rfc1123.GenerateSafeLengthName(fullUnsafeName),
+	}
+
+	// Check if the Job already exists
+	newJob := &batchv1.Job{}
+	if err := r.Get(ctx, newJobNamespacedName.AsType(wwr.Namespace), newJob); err != nil {
+		if !apierrors.IsNotFound(err) {
+			emsg := fmt.Errorf(`can not fetch Job %q`, newJobNamespacedName)
+			wwrLog.Error(err, emsg.Error())
+			return errors.Join(err, emsg)
+		}
+
+		// New Job not found, clone suspended Job.
+		newJob = cloneJob(job, newJobNamespacedName, newLabels)
+
+		// Append Secret volume to Job containers
+		appendSecretVolumeToJobContainers(newJob, *secret)
+
+		// Set the ownerRef for the Job
+		// More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/owners-dependents/
+		if err := ctrl.SetControllerReference(wwr, newJob, r.Scheme); err != nil {
+			emsg := fmt.Errorf(`can not set reference for Job %s/%s as %s/%s`, *jnn.Namespace, jnn.Name, wwr.Namespace, wwr.Name)
+			wwrLog.Error(err, emsg.Error())
+			return errors.Join(err, emsg)
+		}
+		wwrLog.Info("New Job to be created", "Job", newJob)
+
+		// Create new Job
+		if err := r.Create(ctx, newJob); err != nil {
+			emsg := fmt.Errorf(`can not create new Job "%s/%s" from Job "%s/%s"`, newJob.Namespace, newJob.Name, job.Namespace, job.Name)
+			wwrLog.Error(err, emsg.Error())
+			return errors.Join(err, emsg)
+		}
+		wwrLog.Info("New Job created", "Job", newJobNamespacedName)
+	}
+
+	wwr.Status.CurrentJobs = append(wwr.Status.CurrentJobs, newJobNamespacedName)
+	wwrLog.Info("Added Job", "Job", newJobNamespacedName)
+	return nil
+}
+
+func (r *WorkflowWebhookRequestReconciler) checkConcurrencyPolicy(
+	ctx context.Context,
+	jtbc simplecicdv1alpha1.JobsToBeCloned,
+	newLabels map[string]string,
+) (bool, error) {
+	if jtbc.ConcurrencyPolicy == nil {
+		// By default, allows a new job instance
+		return false, nil
+	}
+	switch *jtbc.ConcurrencyPolicy {
+	case simplecicdv1alpha1.Forbid:
+		// Skip current new job becase is already running an older one
+		return true, nil
+	case simplecicdv1alpha1.Replace:
+		// Removed old job instances
+
+		// Fetch old job instances
+		jobList := &batchv1.JobList{}
+		if err := r.List(ctx, jobList, &client.ListOptions{
+			LabelSelector: labels.Set(newLabels).AsSelector(),
+		}, &client.ListOptions{
+			Namespace: newLabels[LabelJobNamespace],
+		}); err != nil {
+			return false, err
+		}
+
+		// Delete old jobs
+		for _, j := range jobList.Items {
+			if err := r.Delete(ctx, &j); err != nil {
+				emsg := fmt.Errorf("can not delete old job %s/%s", j.Namespace, j.Name)
+				wwrLog.Error(err, emsg.Error())
+				return false, errors.Join(err, emsg)
+			}
+		}
+
+		return false, nil
+	default:
+		// Allows a new job instance
+		return false, nil
+	}
 }
 
 // If WorkflowWebhookRequest has some queued Jobs, check their status, requeue it
@@ -558,7 +654,7 @@ func createSecret(wwr *simplecicdv1alpha1.WorkflowWebhookRequest) *corev1.Secret
 }
 
 // We do not job.DeepCopy() because labels, annotations, and objectrefs (explicit is better than implicit)
-func cloneJob(job *batchv1.Job, njnn simplecicdv1alpha1.NamespacedName) *batchv1.Job {
+func cloneJob(job *batchv1.Job, njnn simplecicdv1alpha1.NamespacedName, newLabels map[string]string) *batchv1.Job {
 	njSuspend := false
 	nj := &batchv1.Job{
 		TypeMeta: metav1.TypeMeta{
@@ -568,6 +664,7 @@ func cloneJob(job *batchv1.Job, njnn simplecicdv1alpha1.NamespacedName) *batchv1
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      njnn.Name,
 			Namespace: *njnn.Namespace,
+			Labels:    newLabels,
 		},
 		Spec: batchv1.JobSpec{
 			ActiveDeadlineSeconds:   job.Spec.ActiveDeadlineSeconds,
@@ -626,4 +723,23 @@ func cloneJob(job *batchv1.Job, njnn simplecicdv1alpha1.NamespacedName) *batchv1
 		},
 	}
 	return nj
+}
+
+func getLabels(
+	fromJobNamespace string,
+	fromJobName string,
+	fromWorkflowNamespace string,
+	fromWorkflowName string,
+	fromWorkflowWebhookNamespace string,
+	fromWorkflowWebhookName string,
+	defaultNamespace string,
+) map[string]string {
+	return map[string]string{
+		LabelWorkflowWebhookNamespace: fromWorkflowWebhookNamespace,
+		LabelWorkflowWebhookName:      fromWorkflowWebhookName,
+		LabelWorkFlowNamespace:        fromWorkflowNamespace,
+		LabelWorkFlowName:             fromWorkflowName,
+		LabelJobNamespace:             fromJobNamespace,
+		LabelJobName:                  fromJobName,
+	}
 }
