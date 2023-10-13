@@ -36,6 +36,9 @@ spec:
           spec:
             description: WorkflowWebhookSpec defines the desired state of WorkflowWebhook
             properties:
+              suspend:
+                description: Defaults to false
+                type: boolean
               workflows:
                 items:
                   properties:

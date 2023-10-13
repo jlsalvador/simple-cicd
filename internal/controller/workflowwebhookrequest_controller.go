@@ -262,6 +262,11 @@ func (r *WorkflowWebhookRequestReconciler) reconcileCurrentJobs(ctx context.Cont
 			return false, errors.Join(err, emsg)
 		}
 
+		// Skip suspended Workflow
+		if workflow.Spec.Suspend != nil && *workflow.Spec.Suspend {
+			continue
+		}
+
 		// Create a Job for each Workflow.Spec.JobsToBeCloned and add ref. into
 		// WorkflowWebhookRequest.Spec.CurrentJobs
 		numJobsToBeCloned := len(workflow.Spec.JobsToBeCloned)

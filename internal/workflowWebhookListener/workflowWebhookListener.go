@@ -115,6 +115,14 @@ func webhookHandler(c client.Client, ctx context.Context, w http.ResponseWriter,
 		return
 	}
 
+	// Skip suspended WorkflowWebhook
+	if ww.Spec.Suspend != nil && *ww.Spec.Suspend {
+		log.Info("skipping suspended WorkflowWebhook", "WorkflowWebhook", ww)
+		w.WriteHeader(http.StatusServiceUnavailable)
+		w.Write([]byte(http.StatusText(http.StatusServiceUnavailable)))
+		return
+	}
+
 	// Create a WorkflowWebhookRequest
 	body, err := io.ReadAll(r.Body)
 	if err != nil {

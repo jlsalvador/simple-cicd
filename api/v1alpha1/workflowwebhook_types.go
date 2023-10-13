@@ -24,6 +24,10 @@ import (
 type WorkflowWebhookSpec struct {
 	// +required
 	Workflows []NamespacedName `json:"workflows"`
+
+	// Defaults to false
+	// +optional
+	Suspend *bool `json:"suspend,omitempty" protobuf:"varint,10,opt,name=suspend"`
 }
 
 //+kubebuilder:object:root=true
