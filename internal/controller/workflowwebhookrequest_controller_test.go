@@ -26,7 +26,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	batchv1 "k8s.io/api/batch/v1"
-	v1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
@@ -62,10 +62,10 @@ var _ = Describe("WorkflowWebhookRequest controller", func() {
 		Spec: batchv1.JobSpec{
 			Suspend:      &suspend,
 			BackoffLimit: &backoffLimit,
-			Template: v1.PodTemplateSpec{
-				Spec: v1.PodSpec{
-					RestartPolicy: v1.RestartPolicyNever,
-					Containers: []v1.Container{
+			Template: corev1.PodTemplateSpec{
+				Spec: corev1.PodSpec{
+					RestartPolicy: corev1.RestartPolicyNever,
+					Containers: []corev1.Container{
 						{
 							Name:  "echo-request",
 							Image: "bash",
@@ -95,10 +95,10 @@ var _ = Describe("WorkflowWebhookRequest controller", func() {
 		Spec: batchv1.JobSpec{
 			Suspend:      &suspend,
 			BackoffLimit: &backoffLimit,
-			Template: v1.PodTemplateSpec{
-				Spec: v1.PodSpec{
-					RestartPolicy: v1.RestartPolicyNever,
-					Containers: []v1.Container{
+			Template: corev1.PodTemplateSpec{
+				Spec: corev1.PodSpec{
+					RestartPolicy: corev1.RestartPolicyNever,
+					Containers: []corev1.Container{
 						{
 							Name:    "success",
 							Image:   "bash",
@@ -121,10 +121,10 @@ var _ = Describe("WorkflowWebhookRequest controller", func() {
 		Spec: batchv1.JobSpec{
 			Suspend:      &suspend,
 			BackoffLimit: &backoffLimit,
-			Template: v1.PodTemplateSpec{
-				Spec: v1.PodSpec{
-					RestartPolicy: v1.RestartPolicyNever,
-					Containers: []v1.Container{
+			Template: corev1.PodTemplateSpec{
+				Spec: corev1.PodSpec{
+					RestartPolicy: corev1.RestartPolicyNever,
+					Containers: []corev1.Container{
 						{
 							Name:    "failure",
 							Image:   "bash",
@@ -288,131 +288,42 @@ var _ = Describe("WorkflowWebhookRequest controller", func() {
 				Name:      pr.Name,
 			}
 
-			By("By waiting for a new WorkflowWebhookRequest")
 			Eventually(func() bool {
 				wwr := &simplecicdv1alpha1.WorkflowWebhookRequest{}
-				err := k8sClient.Get(ctx, wwrnn, wwr)
-				return err == nil
-			}, timeout, interval).Should(BeTrue())
+				By(fmt.Sprintf("By waiting for WorkflowWebhookRequest %s", wwrnn))
+				Eventually(func() bool {
+					wwr = &simplecicdv1alpha1.WorkflowWebhookRequest{}
+					err := k8sClient.Get(ctx, wwrnn, wwr)
+					return err == nil && (wwr.Status.Done || len(wwr.Status.CurrentJobs) > 0)
+				}, timeout, interval).Should(BeTrue())
 
-			//TODO: Check Jobs
+				By("By waiting for Jobs", func() {
+					for _, jn := range wwr.Status.CurrentJobs {
+						// Fetch Job
+						job := &batchv1.Job{}
+						By(fmt.Sprintf("Fetch Job %s", jn))
+						Eventually(func() bool {
+							err := k8sClient.Get(ctx, jn.AsType(""), job)
+							GinkgoLogr.Info("Job", "Name", jn, "Job", job)
+							return err == nil && job != nil
+						}, timeout, interval).Should(BeTrue())
 
-			// By("By checking the WorkflowWebhookRequest is Done")
-			// Eventually(func() (bool, error) {
-			// 	wwr := &simplecicdv1alpha1.WorkflowWebhookRequest{}
-			// 	err := k8sClient.Get(ctx, wwrnn, wwr)
-			// 	if err != nil {
-			// 		return false, err
-			// 	}
-			// 	return wwr.Spec.Done, nil
-			// }, nodeTimeout, interval).Should(BeTrue())
+						// Simulate Job Complete
+						By(fmt.Sprintf("Simulate Job is Complete %s", jn))
+						Eventually(func() bool {
+							job.Status.Conditions = append(job.Status.Conditions, batchv1.JobCondition{
+								Type:   batchv1.JobComplete,
+								Status: corev1.ConditionTrue,
+							})
+							err := k8sClient.Status().Update(ctx, job)
+							return err == nil
+						}, timeout, interval).Should(BeTrue())
+					}
+				})
+
+				return wwr.Status.Done
+			}, nodeTimeout, interval).Should(BeTrue())
 
 		}, NodeTimeout(nodeTimeout))
 	})
-
-	// Context("When updating CronJob Status", func() {
-	// 	It("Should increase CronJob Status.Active count when new Jobs are created", func() {
-	// 		By("By creating a new CronJob")
-	// 		cronJob := &cronjobv1.CronJob{
-	// 			TypeMeta: metav1.TypeMeta{
-	// 				APIVersion: "batch.tutorial.kubebuilder.io/v1",
-	// 				Kind:       "CronJob",
-	// 			},
-	// 			ObjectMeta: metav1.ObjectMeta{
-	// 				Name:      CronjobName,
-	// 				Namespace: CronjobNamespace,
-	// 			},
-	// 			Spec: cronjobv1.CronJobSpec{
-	// 				Schedule: "1 * * * *",
-	// 				JobTemplate: batchv1.JobTemplateSpec{
-	// 					Spec: batchv1.JobSpec{
-	// 						// For simplicity, we only fill out the required fields.
-	// 						Template: v1.PodTemplateSpec{
-	// 							Spec: v1.PodSpec{
-	// 								// For simplicity, we only fill out the required fields.
-	// 								Containers: []v1.Container{
-	// 									{
-	// 										Name:  "test-container",
-	// 										Image: "test-image",
-	// 									},
-	// 								},
-	// 								RestartPolicy: v1.RestartPolicyOnFailure,
-	// 							},
-	// 						},
-	// 					},
-	// 				},
-	// 			},
-	// 		}
-	// 		Expect(k8sClient.Create(ctx, cronJob)).Should(Succeed())
-
-	// 		cronjobLookupKey := types.NamespacedName{Name: CronjobName, Namespace: CronjobNamespace}
-	// 		createdCronjob := &cronjobv1.CronJob{}
-
-	// 		// We'll need to retry getting this newly created CronJob, given that creation may not immediately happen.
-	// 		Eventually(func() bool {
-	// 			err := k8sClient.Get(ctx, cronjobLookupKey, createdCronjob)
-	// 			if err != nil {
-	// 				return false
-	// 			}
-	// 			return true
-	// 		}, timeout, interval).Should(BeTrue())
-	// 		// Let's make sure our Schedule string value was properly converted/handled.
-	// 		Expect(createdCronjob.Spec.Schedule).Should(Equal("1 * * * *"))
-
-	// 		By("By checking the CronJob has zero active Jobs")
-	// 		Consistently(func() (int, error) {
-	// 			err := k8sClient.Get(ctx, cronjobLookupKey, createdCronjob)
-	// 			if err != nil {
-	// 				return -1, err
-	// 			}
-	// 			return len(createdCronjob.Status.Active), nil
-	// 		}, duration, interval).Should(Equal(0))
-	// 		By("By creating a new Job")
-	// 		testJob := &batchv1.Job{
-	// 			ObjectMeta: metav1.ObjectMeta{
-	// 				Name:      JobName,
-	// 				Namespace: CronjobNamespace,
-	// 			},
-	// 			Spec: batchv1.JobSpec{
-	// 				Template: v1.PodTemplateSpec{
-	// 					Spec: v1.PodSpec{
-	// 						// For simplicity, we only fill out the required fields.
-	// 						Containers: []v1.Container{
-	// 							{
-	// 								Name:  "test-container",
-	// 								Image: "test-image",
-	// 							},
-	// 						},
-	// 						RestartPolicy: v1.RestartPolicyOnFailure,
-	// 					},
-	// 				},
-	// 			},
-	// 			Status: batchv1.JobStatus{
-	// 				Active: 2,
-	// 			},
-	// 		}
-
-	// 		// Note that your CronJob’s GroupVersionKind is required to set up this owner reference.
-	// 		kind := reflect.TypeOf(cronjobv1.CronJob{}).Name()
-	// 		gvk := cronjobv1.GroupVersion.WithKind(kind)
-
-	// 		controllerRef := metav1.NewControllerRef(createdCronjob, gvk)
-	// 		testJob.SetOwnerReferences([]metav1.OwnerReference{*controllerRef})
-	// 		Expect(k8sClient.Create(ctx, testJob)).Should(Succeed())
-
-	// 		By("By checking that the CronJob has one active Job")
-	// 		Eventually(func() ([]string, error) {
-	// 			err := k8sClient.Get(ctx, cronjobLookupKey, createdCronjob)
-	// 			if err != nil {
-	// 				return nil, err
-	// 			}
-
-	// 			names := []string{}
-	// 			for _, job := range createdCronjob.Status.Active {
-	// 				names = append(names, job.Name)
-	// 			}
-	// 			return names, nil
-	// 		}, timeout, interval).Should(ConsistOf(JobName), "should list our active job %s in the active jobs list in status", JobName)
-	// 	})
-	// })
 })
