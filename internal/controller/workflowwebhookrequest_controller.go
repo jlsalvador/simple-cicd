@@ -137,21 +137,21 @@ func (r *WorkflowWebhookRequestReconciler) Reconcile(ctx context.Context, req ct
 //
 // The purpose is check if the Custom Resource for the Kind WorkflowWebhookRequest
 // is applied on the cluster if not we return nil to stop the reconciliation
-func (r *WorkflowWebhookRequestReconciler) ensureWorkflowWebhookRequest(ctx context.Context, namespacedName types.NamespacedName) (*simplecicdv1alpha1.WorkflowWebhookRequest, error) {
+func (r *WorkflowWebhookRequestReconciler) ensureWorkflowWebhookRequest(ctx context.Context, wwrnn types.NamespacedName) (*simplecicdv1alpha1.WorkflowWebhookRequest, error) {
 	wwr := &simplecicdv1alpha1.WorkflowWebhookRequest{}
-	if err := r.Get(ctx, namespacedName, wwr); err != nil {
+	if err := r.Get(ctx, wwrnn, wwr); err != nil {
 		if apierrors.IsNotFound(err) {
 			// If the custom resource is not found then, it usually means that it was deleted or not created
 			// In this way, we will stop the reconciliation
-			wwrLog.Info("workflowWebhookRequest resource not found. Ignoring since object must be deleted")
+			wwrLog.Info("resource not found. Ignoring since object must be deleted", "WorkflowWebhookRequest", wwrnn)
 			return nil, nil
 		}
 		// Error reading the object - requeue the request.
-		emsg := fmt.Sprintf("Failed to get workflowWebhookRequest %q", namespacedName)
+		emsg := fmt.Sprintf("Failed to get workflowWebhookRequest %q", wwrnn)
 		wwrLog.Error(err, emsg)
 		return nil, errors.Join(err, errors.New(emsg))
 	}
-	wwrLogDebug.Info("WorkflowWebhookRequest fetched", "WorkflowWebhookRequest", namespacedName)
+	wwrLogDebug.Info("WorkflowWebhookRequest fetched", "WorkflowWebhookRequest", wwrnn)
 	return wwr, nil
 }
 
@@ -221,7 +221,7 @@ func (r *WorkflowWebhookRequestReconciler) reconcileCurrentWorkFlows(ctx context
 		if apierrors.IsNotFound(err) {
 			// If the custom resource is not found then, it usually means that it
 			// was deleted or not created. In this way, we will stop the reconciliation
-			wwrLog.Info("workflowWebhook resource not found. Ignoring since object must be deleted")
+			wwrLog.Info("resource not found. Ignoring since object must be deleted", "WorkflowWebhook", wwnn)
 			return nil
 		}
 		// Error reading the object - requeue the request.
