@@ -39,7 +39,7 @@ import (
 
 const (
 	// Duration to the next reconciliation.
-	requeueAfter = time.Second * 10
+	requeueAfter = time.Millisecond * 500 // 0.5s
 )
 
 var wwrLog = ctrl.Log.WithName("workflowWebhookRequest controller")
