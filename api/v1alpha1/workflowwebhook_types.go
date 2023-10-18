@@ -20,13 +20,13 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// Specifies how to treat concurrent executions of a job that is created by this Workflow.
-// If not specified, the default behavior is "Allow".
+// ConcurrencyPolicy specifies how concurrent executions of WorkflowWebhookRequests
+// that refer to this WorkflowWebhook should be treated.
 //
-// The spec may specify only one of the following concurrency policies:
-//   - Allow: Allows concurrently running jobs.
-//   - Forbid: If it is time for a new job run and the previous job run hasn't finished yet, skips the new job run.
-//   - Replace: If it is time for a new job run and the previous job run hasn't finished yet, replaces the currently running job run with a new job run.
+// Choose one of the following concurrency policies:
+//   - "Allow": Allows concurrent WorkflowWebhookRequests.
+//   - "Forbid": Skips new WorkflowWebhookRequests if previous ones are still in progress.
+//   - "Replace": Deletes old WorkflowWebhookRequests if new ones arrive before completion.
 //
 // +kubebuilder:validation:Enum=Allow;Forbid;Replace
 type ConcurrencyPolicy string
@@ -39,20 +39,25 @@ const (
 
 // WorkflowWebhookSpec defines the desired state of WorkflowWebhook
 type WorkflowWebhookSpec struct {
+	// Specifies the list of Workflows to run.
+	//
 	// +required
 	Workflows []NamespacedName `json:"workflows"`
 
-	// Defaults to false
+	// Suspend suspends the execution of this WorkflowWebhook, disabling the ability to
+	// create new WorkflowWebhookRequests referred to by this WorkflowWebhook.
+	// Defaults to false.
+	//
 	// +optional
 	Suspend *bool `json:"suspend,omitempty" protobuf:"varint,10,opt,name=suspend"`
 
-	// Specifies how to treat concurrent executions of a job that is created by this Workflow.
-	// If not specified, the default behavior is "Allow".
+	// ConcurrencyPolicy specifies how concurrent executions of WorkflowWebhookRequests
+	// that refer to this WorkflowWebhook should be treated.
 	//
-	// The spec may specify only one of the following concurrency policies:
-	//   - Allow: Allows concurrently running jobs.
-	//   - Forbid: If it is time for a new job run and the previous job run hasn't finished yet, skips the new job run.
-	//   - Replace: If it is time for a new job run and the previous job run hasn't finished yet, replaces the currently running job run with a new job run.
+	// Choose one of the following concurrency policies:
+	//   - "Allow": Allows concurrent WorkflowWebhookRequests.
+	//   - "Forbid": Skips new WorkflowWebhookRequests if previous ones are still in progress.
+	//   - "Replace": Deletes old WorkflowWebhookRequests if new ones arrive before completion.
 	//
 	// +default="Allow"
 	// +optional

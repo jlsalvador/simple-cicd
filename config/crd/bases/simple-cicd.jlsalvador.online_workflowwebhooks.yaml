@@ -37,23 +37,25 @@ spec:
             description: WorkflowWebhookSpec defines the desired state of WorkflowWebhook
             properties:
               concurrencyPolicy:
-                description: "Specifies how to treat concurrent executions of a job
-                  that is created by this Workflow. If not specified, the default
-                  behavior is \"Allow\". \n The spec may specify only one of the following
-                  concurrency policies: - Allow: Allows concurrently running jobs.
-                  - Forbid: If it is time for a new job run and the previous job run
-                  hasn't finished yet, skips the new job run. - Replace: If it is
-                  time for a new job run and the previous job run hasn't finished
-                  yet, replaces the currently running job run with a new job run."
+                description: "ConcurrencyPolicy specifies how concurrent executions
+                  of WorkflowWebhookRequests that refer to this WorkflowWebhook should
+                  be treated. \n Choose one of the following concurrency policies:
+                  - \"Allow\": Allows concurrent WorkflowWebhookRequests. - \"Forbid\":
+                  Skips new WorkflowWebhookRequests if previous ones are still in
+                  progress. - \"Replace\": Deletes old WorkflowWebhookRequests if
+                  new ones arrive before completion."
                 enum:
                 - Allow
                 - Forbid
                 - Replace
                 type: string
               suspend:
-                description: Defaults to false
+                description: Suspend suspends the execution of this WorkflowWebhook,
+                  disabling the ability to create new WorkflowWebhookRequests referred
+                  to by this WorkflowWebhook. Defaults to false.
                 type: boolean
               workflows:
+                description: Specifies the list of Workflows to run.
                 items:
                   properties:
                     name:
