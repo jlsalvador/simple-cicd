@@ -59,12 +59,12 @@ var (
 
 // Configures the test environment
 const (
-	namespace  = "default"
-	namePrefix = "test-"
-
 	nodeTimeout = time.Second * 60
 	timeout     = time.Second * 10
 	interval    = time.Second * 1
+
+	namespace  = "default"
+	namePrefix = "test-"
 )
 
 // Pointer-referred variables for the test assets
