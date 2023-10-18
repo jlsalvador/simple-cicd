@@ -81,7 +81,7 @@ spec:
             type: object
           status:
             description: WorkflowWebhookRequestStatus defines the observed state of
-              WorkflowWebhookRequest
+              a WorkflowWebhookRequest.
             properties:
               conditions:
                 description: "Represents the observations of a WorkflowWebhookRequestStatus's
@@ -117,8 +117,8 @@ spec:
                   type: object
                 type: array
               currentJobs:
-                description: List of Jobs running associated with current Workflows
-                  triggered.
+                description: List of Jobs currently running associated with the current
+                  WorkflowWebhookRequest.
                 items:
                   properties:
                     name:
@@ -130,7 +130,7 @@ spec:
                   type: object
                 type: array
               currentWorkflows:
-                description: List of Workflows currently triggered.
+                description: List of Workflows currently triggered by this WorkflowWebhookRequest.
                 items:
                   properties:
                     name:
@@ -146,7 +146,7 @@ spec:
                   WorkflowWebhookRequest during future reconciliations.
                 type: boolean
               nextWorkflows:
-                description: List of the next Workflows to be triggered.
+                description: List of the next Workflows to be triggered by this WorkflowWebhookRequest.
                 items:
                   properties:
                     name:

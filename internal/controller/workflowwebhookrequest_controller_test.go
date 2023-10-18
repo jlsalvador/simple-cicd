@@ -46,6 +46,8 @@ var _ = Describe("WorkflowWebhookRequest controller", func() {
 	namespace := "default"
 	namePrefix := "test-"
 	suspend := true
+	replace := simplecicdv1alpha1.Replace
+	forbid := simplecicdv1alpha1.Forbid
 	backoffLimit := int32(0)
 	onSuccess := simplecicdv1alpha1.OnSuccess
 	onFailure := simplecicdv1alpha1.OnFailure
@@ -204,6 +206,53 @@ var _ = Describe("WorkflowWebhookRequest controller", func() {
 			},
 		},
 	}
+	workflowSuspended := &simplecicdv1alpha1.Workflow{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: simplecicdv1alpha1.GroupVersion.Identifier(),
+			Kind:       "Workflow",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      namePrefix + "suspended",
+			Namespace: namespace,
+		},
+		Spec: simplecicdv1alpha1.WorkflowSpec{
+			Suspend: &suspend,
+			JobsToBeCloned: []simplecicdv1alpha1.JobsToBeCloned{
+				{Name: jobSuccess.ObjectMeta.Name},
+				{Name: jobFailure.ObjectMeta.Name},
+			},
+		},
+	}
+	workflowReplace := &simplecicdv1alpha1.Workflow{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: simplecicdv1alpha1.GroupVersion.Identifier(),
+			Kind:       "Workflow",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      namePrefix + "replace",
+			Namespace: namespace,
+		},
+		Spec: simplecicdv1alpha1.WorkflowSpec{
+			JobsToBeCloned: []simplecicdv1alpha1.JobsToBeCloned{
+				{Name: jobSuccess.ObjectMeta.Name, ConcurrencyPolicy: &replace},
+			},
+		},
+	}
+	workflowForbid := &simplecicdv1alpha1.Workflow{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: simplecicdv1alpha1.GroupVersion.Identifier(),
+			Kind:       "Workflow",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      namePrefix + "forbid",
+			Namespace: namespace,
+		},
+		Spec: simplecicdv1alpha1.WorkflowSpec{
+			JobsToBeCloned: []simplecicdv1alpha1.JobsToBeCloned{
+				{Name: jobSuccess.ObjectMeta.Name, ConcurrencyPolicy: &forbid},
+			},
+		},
+	}
 	workflowWebhook := &simplecicdv1alpha1.WorkflowWebhook{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: simplecicdv1alpha1.GroupVersion.Identifier(),
@@ -216,6 +265,9 @@ var _ = Describe("WorkflowWebhookRequest controller", func() {
 		Spec: simplecicdv1alpha1.WorkflowWebhookSpec{
 			Workflows: []simplecicdv1alpha1.NamespacedName{
 				{Name: workflowAllSuccess.ObjectMeta.Name},
+				{Name: workflowSuspended.ObjectMeta.Name},
+				{Name: workflowReplace.ObjectMeta.Name},
+				{Name: workflowForbid.ObjectMeta.Name},
 			},
 		},
 	}
@@ -229,100 +281,96 @@ var _ = Describe("WorkflowWebhookRequest controller", func() {
 				jobFailure,
 			} {
 				Expect(k8sClient.Create(ctx, job)).Should(Succeed())
-				Eventually(func() bool {
-					err := k8sClient.Get(ctx, types.NamespacedName{
+				Eventually(func() error {
+					return k8sClient.Get(ctx, types.NamespacedName{
 						Namespace: job.Namespace,
 						Name:      job.Name,
 					}, job)
-					return err == nil
-				}, timeout, interval).Should(BeTrue())
+				}, timeout, interval).Should(Succeed())
 			}
 
-			By("By creating all Workflows")
-			for _, workflow := range []*simplecicdv1alpha1.Workflow{
-				workflowCatRequest,
-				workflowAllSuccess,
-				workflowAllFails,
-				workflowAllSome,
-			} {
-				Expect(k8sClient.Create(ctx, workflow)).Should(Succeed())
-				Eventually(func() bool {
-					err := k8sClient.Get(ctx, types.NamespacedName{
-						Namespace: workflow.Namespace,
-						Name:      workflow.Name,
-					}, workflow)
-					return err == nil
-				}, timeout, interval).Should(BeTrue())
-			}
+			By("By creating all Workflows", func() {
+				for _, workflow := range []*simplecicdv1alpha1.Workflow{
+					workflowCatRequest,
+					workflowAllSuccess,
+					workflowAllFails,
+					workflowAllSome,
+					workflowSuspended,
+					workflowReplace,
+					workflowForbid,
+				} {
+					Expect(k8sClient.Create(ctx, workflow)).Should(Succeed())
+					Eventually(func() error {
+						return k8sClient.Get(ctx, types.NamespacedName{
+							Namespace: workflow.Namespace,
+							Name:      workflow.Name,
+						}, workflow)
+					}, timeout, interval).Should(Succeed())
+				}
+			})
 
-			By("By creating the WorkflowWebhook")
-			Expect(k8sClient.Create(ctx, workflowWebhook)).Should(Succeed())
-			Eventually(func() bool {
-				err := k8sClient.Get(ctx, types.NamespacedName{
-					Namespace: workflowWebhook.Namespace,
-					Name:      workflowWebhook.Name,
-				}, workflowWebhook)
-				return err == nil
-			}, timeout, interval).Should(BeTrue())
+			By("By creating the WorkflowWebhook", func() {
+				Expect(k8sClient.Create(ctx, workflowWebhook)).Should(Succeed())
+				Eventually(func() error {
+					return k8sClient.Get(ctx, types.NamespacedName{
+						Namespace: workflowWebhook.Namespace,
+						Name:      workflowWebhook.Name,
+					}, workflowWebhook)
+				}, timeout, interval).Should(Succeed())
+			})
 
-			By("By trigger the creation of a WorkflowWebhookRequest through listener")
-			url := fmt.Sprintf(
-				"http://%s/%s/%s",
-				webhookListener.Addr(),
-				workflowWebhook.ObjectMeta.Namespace,
-				workflowWebhook.ObjectMeta.Name,
-			)
-			payload := []byte(`{"username":"john doe","password":"super.Secr3t"}`)
-
-			resp, err := http.Post(url, contentTypeJson, bytes.NewReader(payload))
-			Expect(err).NotTo(HaveOccurred())
-			defer resp.Body.Close()
-
-			By("By reading response payload with WorkflowWebhookRequest NamespacedName")
 			pr := &simplecicdv1alpha1.NamespacedName{}
-			err = json.NewDecoder(resp.Body).Decode(pr)
-			Expect(err).NotTo(HaveOccurred())
+			By("By trigger the creation of a WorkflowWebhookRequest through listener and reading payload", func() {
+				url := fmt.Sprintf(
+					"http://%s/%s/%s",
+					webhookListener.Addr(),
+					workflowWebhook.ObjectMeta.Namespace,
+					workflowWebhook.ObjectMeta.Name,
+				)
+				payload := []byte(`{"username":"john doe","password":"super.Secr3t"}`)
 
+				resp, err := http.Post(url, contentTypeJson, bytes.NewReader(payload))
+				Expect(err).Should(Succeed())
+				defer resp.Body.Close()
+
+				By("By reading response payload with WorkflowWebhookRequest NamespacedName")
+				Expect(json.NewDecoder(resp.Body).Decode(pr)).Should(Succeed())
+			})
 			wwrnn := types.NamespacedName{
 				Namespace: *pr.Namespace,
 				Name:      pr.Name,
 			}
+			wwr := &simplecicdv1alpha1.WorkflowWebhookRequest{}
 
-			Eventually(func() bool {
-				wwr := &simplecicdv1alpha1.WorkflowWebhookRequest{}
-				By(fmt.Sprintf("By waiting for WorkflowWebhookRequest %s", wwrnn))
+			By(fmt.Sprintf("By waiting for WorkflowWebhookRequest.Status.Done %s", wwrnn), func() {
 				Eventually(func() bool {
-					wwr = &simplecicdv1alpha1.WorkflowWebhookRequest{}
-					err := k8sClient.Get(ctx, wwrnn, wwr)
-					return err == nil && (wwr.Status.Done || len(wwr.Status.CurrentJobs) > 0)
-				}, timeout, interval).Should(BeTrue())
+					Eventually(func() error {
+						return k8sClient.Get(ctx, wwrnn, wwr)
+					}, timeout, interval).Should(Succeed())
 
-				By("By waiting for Jobs", func() {
 					for _, jn := range wwr.Status.CurrentJobs {
 						// Fetch Job
 						job := &batchv1.Job{}
-						By(fmt.Sprintf("Fetch Job %s", jn))
 						Eventually(func() bool {
-							err := k8sClient.Get(ctx, jn.AsType(""), job)
-							GinkgoLogr.Info("Job", "Name", jn, "Job", job)
+							err := k8sClient.Get(ctx, jn.AsType(wwr.Namespace), job)
 							return err == nil && job != nil
 						}, timeout, interval).Should(BeTrue())
 
 						// Simulate Job Complete
-						By(fmt.Sprintf("Simulate Job is Complete %s", jn))
-						Eventually(func() bool {
-							job.Status.Conditions = append(job.Status.Conditions, batchv1.JobCondition{
-								Type:   batchv1.JobComplete,
-								Status: corev1.ConditionTrue,
-							})
-							err := k8sClient.Status().Update(ctx, job)
-							return err == nil
-						}, timeout, interval).Should(BeTrue())
+						job.Status.Conditions = append(job.Status.Conditions, batchv1.JobCondition{
+							Type:   batchv1.JobComplete,
+							Status: corev1.ConditionTrue,
+						})
+						err := k8sClient.Status().Update(ctx, job)
+						Expect(err).NotTo(HaveOccurred())
 					}
-				})
 
-				return wwr.Status.Done
-			}, nodeTimeout, interval).Should(BeTrue())
+					return wwr.Status.Done
+				}, nodeTimeout, interval).Should(BeTrue())
+			})
+
+			By("Deleting the WorkflowWebhookRequest")
+			Expect(k8sClient.Delete(ctx, wwr)).Should(Succeed())
 
 		}, NodeTimeout(nodeTimeout))
 	})

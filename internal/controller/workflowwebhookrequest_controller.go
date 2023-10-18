@@ -24,15 +24,17 @@ import (
 	"strings"
 	"time"
 
+	"go.uber.org/zap/zapcore"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
+	apilabels "k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	simplecicdv1alpha1 "github.com/jlsalvador/simple-cicd/api/v1alpha1"
 	"github.com/jlsalvador/simple-cicd/internal/common"
@@ -44,16 +46,24 @@ const (
 	requeueAfter = time.Millisecond * 500 // 0.5s
 )
 
+// Label key names
 var (
-	LabelWorkflowWebhookNamespace = simplecicdv1alpha1.GroupVersion.Group + "/from-workflowWebhook-namespace"
-	LabelWorkflowWebhookName      = simplecicdv1alpha1.GroupVersion.Group + "/from-workflowWebhook-name"
-	LabelWorkFlowNamespace        = simplecicdv1alpha1.GroupVersion.Group + "/from-workflow-namespace"
-	LabelWorkFlowName             = simplecicdv1alpha1.GroupVersion.Group + "/from-workflow-name"
-	LabelJobNamespace             = simplecicdv1alpha1.GroupVersion.Group + "/from-job-namespace"
-	LabelJobName                  = simplecicdv1alpha1.GroupVersion.Group + "/from-job-name"
+	LabelWorkflowWebhookRequestNamespace = simplecicdv1alpha1.GroupVersion.Group + "/from-workflowWebhookrequest-namespace"
+	LabelWorkflowWebhookRequestName      = simplecicdv1alpha1.GroupVersion.Group + "/from-workflowWebhookrequest-name"
+	LabelWorkflowWebhookNamespace        = simplecicdv1alpha1.GroupVersion.Group + "/from-workflowWebhook-namespace"
+	LabelWorkflowWebhookName             = simplecicdv1alpha1.GroupVersion.Group + "/from-workflowWebhook-name"
+	LabelWorkFlowNamespace               = simplecicdv1alpha1.GroupVersion.Group + "/from-workflow-namespace"
+	LabelWorkFlowName                    = simplecicdv1alpha1.GroupVersion.Group + "/from-workflow-name"
+	LabelJobNamespace                    = simplecicdv1alpha1.GroupVersion.Group + "/from-job-namespace"
+	LabelJobName                         = simplecicdv1alpha1.GroupVersion.Group + "/from-job-name"
 )
 
 var wwrLog = ctrl.Log.WithName("workflowWebhookRequest controller")
+var wwrLogDebug = zap.New(
+	zap.UseDevMode(true),
+	zap.Level(zapcore.DebugLevel),
+	// zap.WriteTo(io.Discard),
+)
 
 // WorkflowWebhookRequestReconciler reconciles a WorkflowWebhookRequest object
 type WorkflowWebhookRequestReconciler struct {
@@ -76,16 +86,18 @@ type WorkflowWebhookRequestReconciler struct {
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.16.0/pkg/reconcile
 func (r *WorkflowWebhookRequestReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	wwrLog.WithValues("run", req.NamespacedName)
+
 	wwr, err := r.ensureWorkflowWebhookRequest(ctx, req.NamespacedName)
 	if err != nil {
 		return ctrl.Result{}, err
 	} else if wwr == nil {
-		// Object deleted, do nothing
+		// Object deleted, do nothing.
 		return ctrl.Result{}, nil
 	}
 
-	// If this WorkflowWebhookRequest is Done, do nothing
 	if wwr.Status.Done {
+		// This WorkflowWebhookRequest is Done, do nothing.
 		return ctrl.Result{}, nil
 	}
 
@@ -93,19 +105,16 @@ func (r *WorkflowWebhookRequestReconciler) Reconcile(ctx context.Context, req ct
 		return ctrl.Result{}, err
 	}
 
-	secret, err := r.ensureSecret(ctx, wwr)
-	if err != nil {
-		return ctrl.Result{}, err
-	} else if secret == nil {
-		// Unexpected behaviour
-		return ctrl.Result{}, fmt.Errorf("unexpected behaviour. Secret is nil")
-	}
-
 	if err := r.reconcileCurrentWorkFlows(ctx, wwr); err != nil {
 		return ctrl.Result{}, err
 	}
 
 	if err := r.reconcileNextWorkflows(ctx, wwr); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	secret, err := r.ensureSecret(ctx, wwr)
+	if err != nil {
 		return ctrl.Result{}, err
 	}
 
@@ -143,7 +152,7 @@ func (r *WorkflowWebhookRequestReconciler) ensureWorkflowWebhookRequest(ctx cont
 		wwrLog.Error(err, emsg)
 		return nil, errors.Join(err, errors.New(emsg))
 	}
-	wwrLog.Info("WorkflowWebhookRequest fetched", "WorkflowWebhookRequest", wwr)
+	wwrLogDebug.Info("WorkflowWebhookRequest fetched", "WorkflowWebhookRequest", namespacedName)
 	return wwr, nil
 }
 
@@ -166,12 +175,12 @@ func (r *WorkflowWebhookRequestReconciler) reconcileConditions(ctx context.Conte
 }
 
 // Ensure that the Secret with the payload (headers, body, method, etc) exists
-func (r *WorkflowWebhookRequestReconciler) ensureSecret(ctx context.Context, wwr *simplecicdv1alpha1.WorkflowWebhookRequest) (*corev1.Secret, error) {
-	secret := &corev1.Secret{}
+func (r *WorkflowWebhookRequestReconciler) ensureSecret(ctx context.Context, wwr *simplecicdv1alpha1.WorkflowWebhookRequest) (secret *corev1.Secret, err error) {
 	secretNamespacedName := types.NamespacedName{
 		Namespace: wwr.Namespace,
 		Name:      wwr.Name,
 	}
+	secret = &corev1.Secret{}
 	if err := r.Get(ctx, secretNamespacedName, secret); err != nil {
 		if !apierrors.IsNotFound(err) {
 			wwrLog.Error(err, "unexpected behaviour")
@@ -195,7 +204,7 @@ func (r *WorkflowWebhookRequestReconciler) ensureSecret(ctx context.Context, wwr
 			wwrLog.Error(err, emsg.Error(), "Secret", secret)
 			return nil, errors.Join(err, emsg)
 		}
-		wwrLog.Info("New Secret created", "Secret", secret)
+		wwrLogDebug.Info("New Secret created", "Secret", secret)
 	}
 	return secret, nil
 }
@@ -207,8 +216,9 @@ func (r *WorkflowWebhookRequestReconciler) reconcileCurrentWorkFlows(ctx context
 	}
 
 	// Fetch the ref. WorkflowWebhook
+	wwnn := wwr.Spec.WorkflowWebhook.AsType(wwr.Namespace)
 	ww := &simplecicdv1alpha1.WorkflowWebhook{}
-	if err := r.Get(ctx, wwr.Spec.WorkflowWebhook.AsType(wwr.Namespace), ww); err != nil {
+	if err := r.Get(ctx, wwnn, ww); err != nil {
 		if apierrors.IsNotFound(err) {
 			// If the custom resource is not found then, it usually means that it
 			// was deleted or not created. In this way, we will stop the reconciliation
@@ -220,14 +230,10 @@ func (r *WorkflowWebhookRequestReconciler) reconcileCurrentWorkFlows(ctx context
 		wwrLog.Error(err, emsg.Error(), "WorkflowWebhookRequest", wwr)
 		return errors.Join(err, emsg)
 	}
-	wwrLog.Info("WorkflowWebhook fetched", "WorkflowWebhook", ww)
+	wwrLogDebug.Info("WorkflowWebhook fetched", "WorkflowWebhook", wwnn)
 
 	wwr.Status.CurrentWorkflows = ww.Spec.Workflows
-
-	if err := r.updateWwr(ctx, wwr); err != nil {
-		return err
-	}
-	return nil
+	return r.updateWwr(ctx, wwr)
 }
 
 // Let's just fill the Spec.NextWorkflows when it is not available
@@ -246,26 +252,22 @@ func (r *WorkflowWebhookRequestReconciler) reconcileNextWorkflows(ctx context.Co
 		if len(w.Spec.Next) == 0 {
 			continue
 		}
-		wwrLog.Info("Append to WorkflowWebhookRequest.Spec.NextWorkflows", "Workflow", w.Spec.Next)
+		wwrLogDebug.Info("Append to WorkflowWebhookRequest.Spec.NextWorkflows", "Workflow", w.Spec.Next)
 		wwr.Status.NextWorkflows = append(wwr.Status.NextWorkflows, w.Spec.Next...)
 	}
 
-	if err := r.updateWwr(ctx, wwr); err != nil {
-		return err
-	}
-	return nil
+	return r.updateWwr(ctx, wwr)
 }
 
-// Let's just fill the Spec.CurrentJobs
-func (r *WorkflowWebhookRequestReconciler) reconcileCurrentJobs(ctx context.Context, wwr *simplecicdv1alpha1.WorkflowWebhookRequest, secret *corev1.Secret) (bool, error) {
+// Let's just fill the Status.CurrentJobs
+func (r *WorkflowWebhookRequestReconciler) reconcileCurrentJobs(ctx context.Context, wwr *simplecicdv1alpha1.WorkflowWebhookRequest, secret *corev1.Secret) (requeue bool, err error) {
 	if wwr.Status.CurrentJobs != nil {
 		return false, nil
 	}
 
 	// Create Jobs from each WorkflowWebhook.Spec.Workflows
 	for _, workflowNamespacedName := range wwr.Status.CurrentWorkflows {
-
-		// Fetch Workflow to fetch its jobs to be cloned
+		// Fetch Workflow that has Jobs to be cloned
 		workflow := &simplecicdv1alpha1.Workflow{}
 		if err := r.Get(ctx, workflowNamespacedName.AsType(wwr.Namespace), workflow); err != nil {
 			emsg := fmt.Errorf("can not fetch Workflow %s", workflowNamespacedName)
@@ -280,17 +282,19 @@ func (r *WorkflowWebhookRequestReconciler) reconcileCurrentJobs(ctx context.Cont
 
 		// Create a Job for each Workflow.Spec.JobsToBeCloned and add ref. into
 		// WorkflowWebhookRequest.Spec.CurrentJobs
-		numJobsToBeCloned := len(workflow.Spec.JobsToBeCloned)
-		for i, jnn := range workflow.Spec.JobsToBeCloned {
+		for i, jtbc := range workflow.Spec.JobsToBeCloned {
+			// Ensure jtbc.Namespace
+			ns := common.DefaultString(jtbc.Namespace, wwr.Namespace)
+			jtbc.Namespace = &ns
+
 			// Clone as a new Job from suspended Job.
-			err := r.createJob(ctx, jnn, wwr, workflow, numJobsToBeCloned, i, secret)
-			if err != nil {
-				return false, err
+			if err := r.createJob(ctx, jtbc, wwr, workflow, i, secret); err != nil {
+				emsg := fmt.Errorf("something happened while cloning job %s", jtbc)
+				wwrLog.Error(err, emsg.Error())
+				return false, errors.Join(err, emsg)
 			}
-
-		} // End JobToBeCloned
-
-	} // End Workflow
+		}
+	}
 
 	wwr.Status.Conditions = append(wwr.Status.Conditions, simplecicdv1alpha1.Condition{
 		Type:               string(simplecicdv1alpha1.WorkflowWebhookRequestWaiting),
@@ -299,41 +303,35 @@ func (r *WorkflowWebhookRequestReconciler) reconcileCurrentJobs(ctx context.Cont
 		Message:            "Waiting for current jobs",
 		LastTransitionTime: metav1.Now(),
 	})
+	err = r.updateWwr(ctx, wwr)
 
-	if err := r.updateWwr(ctx, wwr); err != nil {
-		return false, err
-	}
-
-	// Stop here and check again after a bit
-	return true, nil
+	// Requeue if there is not error
+	return err == nil, err
 }
 
 func (r *WorkflowWebhookRequestReconciler) createJob(
 	ctx context.Context,
-	jnn simplecicdv1alpha1.JobsToBeCloned,
+	jtbc simplecicdv1alpha1.JobsToBeCloned,
 	wwr *simplecicdv1alpha1.WorkflowWebhookRequest,
 	workflow *simplecicdv1alpha1.Workflow,
-	numJobsToBeCloned int,
-	i int,
+	jobIndex int,
 	secret *corev1.Secret,
 ) error {
-	// Ensure job.Namespace
-	ns := common.DefaultString(jnn.Namespace, wwr.Namespace)
-	jnn.Namespace = &ns
-
 	// Create new labels
-	newLabels := getLabels(
-		*jnn.Namespace,
-		jnn.Name,
+	wwnn := wwr.Spec.WorkflowWebhook
+	labels := getLabels(
+		*jtbc.Namespace,
+		jtbc.Name,
 		workflow.Namespace,
 		workflow.Name,
-		common.DefaultString(wwr.Spec.WorkflowWebhook.Namespace, wwr.Namespace),
-		wwr.Spec.WorkflowWebhook.Name,
+		common.DefaultString(wwnn.Namespace, wwr.Namespace),
+		wwnn.Name,
 		wwr.Namespace,
+		wwr.Name,
 	)
 
 	// Check ConcurrencyPolicy
-	if skip, err := r.checkConcurrencyPolicy(ctx, jnn, newLabels); err != nil {
+	if skip, err := r.checkConcurrencyPolicy(ctx, jtbc.ConcurrencyPolicy, labels); err != nil {
 		emsg := errors.New("error while checking ConcurrencyPolicy")
 		wwrLog.Error(err, emsg.Error())
 		return errors.Join(err, emsg)
@@ -343,25 +341,23 @@ func (r *WorkflowWebhookRequestReconciler) createJob(
 
 	job := &batchv1.Job{}
 	if err := r.Get(ctx, types.NamespacedName{
-		Namespace: *jnn.Namespace,
-		Name:      jnn.Name,
+		Namespace: *jtbc.Namespace,
+		Name:      jtbc.Name,
 	}, job); err != nil {
-		emsg := fmt.Errorf(`can not fetch Job "%s"`, jnn.String())
+		emsg := fmt.Errorf(`can not fetch Job "%s"`, jtbc.String())
 		wwrLog.Error(err, emsg.Error())
 		return errors.Join(err, emsg)
 	}
-	wwrLog.Info("Fetch Job to be cloned", "Job", job)
 
 	// Generate new Job NamespacedName
 	var fullUnsafeName string
-	wwrUid := strings.ReplaceAll(string(wwr.GetUID()), "-", "")
-	if numJobsToBeCloned == 1 {
-		fullUnsafeName = fmt.Sprintf("%s-%s-%s", wwr.Name, job.Name, wwrUid)
+	if len(workflow.Spec.JobsToBeCloned) > 1 {
+		fullUnsafeName = fmt.Sprintf("%s-%s-%s-%d-%s-%s", wwr.Name, workflow.Namespace, workflow.Name, jobIndex, job.Namespace, job.Name)
 	} else {
-		fullUnsafeName = fmt.Sprintf("%s-%s-%d-%s", wwr.Name, job.Name, i, wwrUid)
+		fullUnsafeName = fmt.Sprintf("%s-%s-%s-%s-%s", wwr.Name, workflow.Namespace, workflow.Name, job.Namespace, job.Name)
 	}
 	newJobNamespacedName := simplecicdv1alpha1.NamespacedName{
-		Namespace: &workflow.Namespace,
+		Namespace: &wwr.Namespace,
 		Name:      rfc1123.GenerateSafeLengthName(fullUnsafeName),
 	}
 
@@ -375,19 +371,17 @@ func (r *WorkflowWebhookRequestReconciler) createJob(
 		}
 
 		// New Job not found, clone suspended Job.
-		newJob = cloneJob(job, newJobNamespacedName, newLabels)
-
-		// Append Secret volume to Job containers
-		appendSecretVolumeToJobContainers(newJob, *secret)
+		newJob = cloneJob(job, newJobNamespacedName, labels)
+		appendSecretVolumeToJob(newJob, *secret)
 
 		// Set the ownerRef for the Job
 		// More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/owners-dependents/
 		if err := ctrl.SetControllerReference(wwr, newJob, r.Scheme); err != nil {
-			emsg := fmt.Errorf(`can not set reference for Job %s/%s as %s/%s`, *jnn.Namespace, jnn.Name, wwr.Namespace, wwr.Name)
+			emsg := fmt.Errorf(`can not set reference for Job %s/%s as %s/%s`, *jtbc.Namespace, jtbc.Name, wwr.Namespace, wwr.Name)
 			wwrLog.Error(err, emsg.Error())
 			return errors.Join(err, emsg)
 		}
-		wwrLog.Info("New Job to be created", "Job", newJob)
+		wwrLogDebug.Info("New Job to be created", "Job", newJob)
 
 		// Create new Job
 		if err := r.Create(ctx, newJob); err != nil {
@@ -395,7 +389,6 @@ func (r *WorkflowWebhookRequestReconciler) createJob(
 			wwrLog.Error(err, emsg.Error())
 			return errors.Join(err, emsg)
 		}
-		wwrLog.Info("New Job created", "Job", newJobNamespacedName)
 	}
 
 	wwr.Status.CurrentJobs = append(wwr.Status.CurrentJobs, newJobNamespacedName)
@@ -403,46 +396,46 @@ func (r *WorkflowWebhookRequestReconciler) createJob(
 	return nil
 }
 
+// Determines whether to skip the creation of a new Job based on
+// the provided concurrencyPolicy and labels.
 func (r *WorkflowWebhookRequestReconciler) checkConcurrencyPolicy(
 	ctx context.Context,
-	jtbc simplecicdv1alpha1.JobsToBeCloned,
-	newLabels map[string]string,
-) (bool, error) {
-	if jtbc.ConcurrencyPolicy == nil {
-		// By default, allows a new job instance
+	concurrentPolicy *simplecicdv1alpha1.ConcurrencyPolicy,
+	labels map[string]string,
+) (skip bool, err error) {
+	if concurrentPolicy == nil || *concurrentPolicy == simplecicdv1alpha1.Allow {
+		// By default, allow the creation of a new Job.
 		return false, nil
 	}
-	switch *jtbc.ConcurrencyPolicy {
+
+	// Fetch Job instances from other WorkflowWebhookRequests with matching labels.
+	jobList := &batchv1.JobList{}
+	if err := r.List(ctx, jobList, &client.ListOptions{
+		LabelSelector: apilabels.Set(labels).AsSelector(),
+	}, &client.ListOptions{
+		Namespace: labels[LabelJobNamespace],
+	}); err != nil {
+		return false, err
+	}
+
+	switch *concurrentPolicy {
 	case simplecicdv1alpha1.Forbid:
-		// Skip current new job becase is already running an older one
-		return true, nil
-	case simplecicdv1alpha1.Replace:
-		// Removed old job instances
-
-		// Fetch old job instances
-		jobList := &batchv1.JobList{}
-		if err := r.List(ctx, jobList, &client.ListOptions{
-			LabelSelector: labels.Set(newLabels).AsSelector(),
-		}, &client.ListOptions{
-			Namespace: newLabels[LabelJobNamespace],
-		}); err != nil {
-			return false, err
+		if len(jobList.Items) > 0 {
+			// Skip creating a new Job because an older one is already running.
+			return true, nil
 		}
-
-		// Delete old jobs
-		for _, j := range jobList.Items {
-			if err := r.Delete(ctx, &j); err != nil {
-				emsg := fmt.Errorf("can not delete old job %s/%s", j.Namespace, j.Name)
+	case simplecicdv1alpha1.Replace:
+		// Delete Job instances from other WorkflowWebhookRequests.
+		for _, job := range jobList.Items {
+			if err := r.Delete(ctx, &job); err != nil {
+				emsg := fmt.Errorf("can not delete old job %s/%s", job.Namespace, job.Name)
 				wwrLog.Error(err, emsg.Error())
 				return false, errors.Join(err, emsg)
 			}
 		}
-
-		return false, nil
-	default:
-		// Allows a new job instance
-		return false, nil
 	}
+
+	return false, nil
 }
 
 // If WorkflowWebhookRequest has some queued Jobs, check their status, requeue it
@@ -465,12 +458,11 @@ func (r *WorkflowWebhookRequestReconciler) checkCurrentJobs(ctx context.Context,
 
 		// If Job is no done requeue WorkflowWebhookRequest
 		isDone, isError := jobStatus(job)
-		if isError {
-			numErrors++
-		}
 		if !isDone {
-			wwrLog.Info("Job is running, requeue reconciliation", "Job", job)
+			wwrLog.Info("Job is running, requeue reconciliation", "Job", jobNamespacedName)
 			return true, nil
+		} else if isError {
+			numErrors++
 		}
 	}
 
@@ -521,7 +513,6 @@ func (r *WorkflowWebhookRequestReconciler) checkCurrentJobs(ctx context.Context,
 	}
 
 	wwr.Status.Conditions = append(wwr.Status.Conditions, newCondition)
-
 	if err := r.updateWwr(ctx, wwr); err != nil {
 		return false, err
 	}
@@ -533,10 +524,10 @@ func (r *WorkflowWebhookRequestReconciler) checkCurrentJobs(ctx context.Context,
 // Update WorkflowWebhookRequest and its .Status subresource
 func (r *WorkflowWebhookRequestReconciler) updateWwr(ctx context.Context, wwr *simplecicdv1alpha1.WorkflowWebhookRequest) error {
 	if err := r.Update(ctx, wwr); err != nil {
-		wwrLog.Error(err, "Failed to update WorkflowWebhookRequest.Spec.CurrentWorkflows")
+		wwrLog.Error(err, "Failed to update WorkflowWebhookRequest")
 		return err
 	}
-	wwrLog.Info("Updated WorkflowWebhookRequest", "WorkflowWebhookRequest", wwr)
+	wwrLogDebug.Info("Updated WorkflowWebhookRequest", "WorkflowWebhookRequest", wwr)
 	return nil
 }
 
@@ -568,7 +559,7 @@ func jobStatus(job *batchv1.Job) (done bool, failed bool) {
 	for _, c := range job.Status.Conditions {
 		switch c.Type {
 		case batchv1.JobFailed:
-			wwrLog.Info("Job was Failed", "Job", job)
+			wwrLogDebug.Info("Job was Failed", "Job", job)
 			return true, true
 		case batchv1.JobComplete:
 			return true, false
@@ -584,9 +575,21 @@ func (r *WorkflowWebhookRequestReconciler) SetupWithManager(mgr ctrl.Manager) er
 		Complete(r)
 }
 
-func appendSecretVolumeToJobContainers(newJob *batchv1.Job, secret corev1.Secret) {
+// Mount each Secret key as a file inside every Job (init)containers.
+//
+// Expected mounted files:
+//   - /var/run/secrets/kubernetes.io/request/host
+//   - /var/run/secrets/kubernetes.io/request/method
+//   - /var/run/secrets/kubernetes.io/request/url
+//   - /var/run/secrets/kubernetes.io/request/headers
+//   - /var/run/secrets/kubernetes.io/request/body
+func appendSecretVolumeToJob(job *batchv1.Job, secret corev1.Secret) {
+	if job == nil {
+		return
+	}
+
 	// Append Secret volume
-	newJob.Spec.Template.Spec.Volumes = append(newJob.Spec.Template.Spec.Volumes, corev1.Volume{
+	job.Spec.Template.Spec.Volumes = append(job.Spec.Template.Spec.Volumes, corev1.Volume{
 		Name: secret.Name,
 		VolumeSource: corev1.VolumeSource{
 			Secret: &corev1.SecretVolumeSource{
@@ -597,17 +600,11 @@ func appendSecretVolumeToJobContainers(newJob *batchv1.Job, secret corev1.Secret
 
 	// Append VolumeMounts to each (init)containers
 	for _, containers := range [][]corev1.Container{
-		newJob.Spec.Template.Spec.InitContainers,
-		newJob.Spec.Template.Spec.Containers,
+		job.Spec.Template.Spec.InitContainers,
+		job.Spec.Template.Spec.Containers,
 	} {
 		for i := range containers {
-			for _, key := range []string{
-				"host",
-				"method",
-				"url",
-				"headers",
-				"body",
-			} {
+			for key := range secret.Data {
 				containers[i].VolumeMounts = append(
 					containers[i].VolumeMounts,
 					corev1.VolumeMount{
@@ -622,6 +619,14 @@ func appendSecretVolumeToJobContainers(newJob *batchv1.Job, secret corev1.Secret
 	}
 }
 
+// Creates a Secret with each WorkflowWebhookRequest payload.
+//
+// The Secret will contains:
+//   - WorkflowWebhookRequest.Spec.Host
+//   - WorkflowWebhookRequest.Spec.Method
+//   - WorkflowWebhookRequest.Spec.Url
+//   - WorkflowWebhookRequest.Spec.Headers
+//   - WorkflowWebhookRequest.Spec.Body
 func createSecret(wwr *simplecicdv1alpha1.WorkflowWebhookRequest) *corev1.Secret {
 	headers := func(headers http.Header) string {
 		hs := []string{}
@@ -732,14 +737,17 @@ func getLabels(
 	fromWorkflowName string,
 	fromWorkflowWebhookNamespace string,
 	fromWorkflowWebhookName string,
-	defaultNamespace string,
+	fromWorkflowWebhookRequestNamespace string,
+	fromWorkflowWebhookRequestName string,
 ) map[string]string {
 	return map[string]string{
-		LabelWorkflowWebhookNamespace: fromWorkflowWebhookNamespace,
-		LabelWorkflowWebhookName:      fromWorkflowWebhookName,
-		LabelWorkFlowNamespace:        fromWorkflowNamespace,
-		LabelWorkFlowName:             fromWorkflowName,
-		LabelJobNamespace:             fromJobNamespace,
-		LabelJobName:                  fromJobName,
+		LabelWorkflowWebhookRequestNamespace: fromWorkflowWebhookRequestNamespace,
+		LabelWorkflowWebhookRequestName:      fromWorkflowWebhookRequestName,
+		LabelWorkflowWebhookNamespace:        fromWorkflowWebhookNamespace,
+		LabelWorkflowWebhookName:             fromWorkflowWebhookName,
+		LabelWorkFlowNamespace:               fromWorkflowNamespace,
+		LabelWorkFlowName:                    fromWorkflowName,
+		LabelJobNamespace:                    fromJobNamespace,
+		LabelJobName:                         fromJobName,
 	}
 }

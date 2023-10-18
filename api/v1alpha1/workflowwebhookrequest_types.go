@@ -77,17 +77,17 @@ type Condition struct {
 	LastTransitionTime metav1.Time     `json:"lastTransitionTime"`
 }
 
-// WorkflowWebhookRequestStatus defines the observed state of WorkflowWebhookRequest
+// WorkflowWebhookRequestStatus defines the observed state of a WorkflowWebhookRequest.
 type WorkflowWebhookRequestStatus struct {
-	// List of Jobs running associated with current Workflows triggered.
+	// List of Jobs currently running associated with the current WorkflowWebhookRequest.
 	// +optional
 	CurrentJobs []NamespacedName `json:"currentJobs,omitempty"`
 
-	// List of Workflows currently triggered.
+	// List of Workflows currently triggered by this WorkflowWebhookRequest.
 	// +optional
 	CurrentWorkflows []NamespacedName `json:"currentWorkflows,omitempty"`
 
-	// List of the next Workflows to be triggered.
+	// List of the next Workflows to be triggered by this WorkflowWebhookRequest.
 	// +optional
 	NextWorkflows []NextWorkflow `json:"nextWorkflows,omitempty"`
 
