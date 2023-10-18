@@ -68,6 +68,10 @@ cyclo: gocyclo ## Run gocyclo against code.
 cyclo-report: gocyclo ## Report gocyclo against code.
 	$(GOCYCLO) -top 15 .
 
+.PHONY: test-ginkgo
+test-ginkgo: envtest ginkgo ## Run ginkgo against code.
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" $(GINKGO) -v ./...
+
 .PHONY: test
 test: manifests generate fmt vet cyclo envtest ## Run tests.
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test ./... -coverprofile cover.out
@@ -145,12 +149,14 @@ KUBECTL ?= kubectl
 KUSTOMIZE ?= $(LOCALBIN)/kustomize
 CONTROLLER_GEN ?= $(LOCALBIN)/controller-gen
 ENVTEST ?= $(LOCALBIN)/setup-envtest
+GINKGO ?= $(LOCALBIN)/ginkgo
 GOCYCLO ?= $(LOCALBIN)/gocyclo
 
 ## Tool Versions
 KUSTOMIZE_VERSION ?= v5.1.1
 CONTROLLER_TOOLS_VERSION ?= v0.13.0
 ENVTEST_VERSION ?= latest
+GINKGO_VERSION ?= latest
 GOCYCLO_VERSION ?= latest
 
 .PHONY: kustomize
@@ -172,6 +178,11 @@ $(CONTROLLER_GEN): $(LOCALBIN)
 envtest: $(ENVTEST) ## Download envtest-setup locally if necessary.
 $(ENVTEST): $(LOCALBIN)
 	test -s $(LOCALBIN)/setup-envtest || GOBIN=$(LOCALBIN) go install sigs.k8s.io/controller-runtime/tools/setup-envtest@$(ENVTEST_VERSION)
+
+.PHONY: ginkgo
+ginkgo: $(GINKGO) ## Download ginkgo locally if necessary.
+$(GINKGO): $(LOCALBIN)
+	test -s $(LOCALBIN)/ginkgo || GOBIN=$(LOCALBIN) go install github.com/onsi/ginkgo/v2/ginkgo@$(GINKGO_VERSION)
 
 .PHONY: gocyclo
 gocyclo: $(GOCYCLO) ## Download gocyclo locally if necessary.
