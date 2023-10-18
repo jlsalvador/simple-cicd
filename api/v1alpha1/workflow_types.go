@@ -94,56 +94,11 @@ func (nw NextWorkflow) AsNamespacedName() NamespacedName {
 	}
 }
 
-// Specifies how to treat concurrent executions of a job that is created by this Workflow.
-// If not specified, the default behavior is "Allow".
-//
-// The spec may specify only one of the following concurrency policies:
-//   - Allow: Allows concurrently running jobs.
-//   - Forbid: If it is time for a new job run and the previous job run hasn't finished yet, skips the new job run.
-//   - Replace: If it is time for a new job run and the previous job run hasn't finished yet, replaces the currently running job run with a new job run.
-//
-// +kubebuilder:validation:Enum=Allow;Forbid;Replace
-type ConcurrencyPolicy string
-
-const (
-	Allow   ConcurrencyPolicy = "Allow"
-	Forbid  ConcurrencyPolicy = "Forbid"
-	Replace ConcurrencyPolicy = "Replace"
-)
-
-type JobsToBeCloned struct {
-	// +optional
-	Namespace *string `json:"namespace,omitempty"`
-
-	// +required
-	Name string `json:"name"`
-
-	// Specifies how to treat concurrent executions of a job that is created by this Workflow.
-	// If not specified, the default behavior is "Allow".
-	//
-	// The spec may specify only one of the following concurrency policies:
-	//   - Allow: Allows concurrently running jobs.
-	//   - Forbid: If it is time for a new job run and the previous job run hasn't finished yet, skips the new job run.
-	//   - Replace: If it is time for a new job run and the previous job run hasn't finished yet, replaces the currently running job run with a new job run.
-	//
-	// +default="Allow"
-	// +optional
-	ConcurrencyPolicy *ConcurrencyPolicy `json:"concurrencyPolicy,omitempty" protobuf:"bytes,3,opt,name=concurrencyPolicy,casttype=ConcurrencyPolicy"`
-}
-
-func (j JobsToBeCloned) String() string {
-	nn := NamespacedName{
-		Namespace: j.Namespace,
-		Name:      j.Name,
-	}
-	return nn.String()
-}
-
 // WorkflowSpec defines the desired state of Workflow
 type WorkflowSpec struct {
 	// Jobs to be cloned
 	// +required
-	JobsToBeCloned []JobsToBeCloned `json:"jobsToBeCloned"`
+	JobsToBeCloned []NamespacedName `json:"jobsToBeCloned"`
 
 	// Optional list of Workflow to execute next
 	// +optional

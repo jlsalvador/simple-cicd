@@ -129,6 +129,18 @@ func webhookHandler(c client.Client, ctx context.Context, w http.ResponseWriter,
 		return
 	}
 
+	// Apply ConcurrencyPolicy
+	if skip, err := applyConcurrencyPolicy(c, ctx, ww); err != nil {
+		emsg := errors.New("error while checking ConcurrencyPolicy")
+		log.Error(err, emsg.Error())
+		return
+	} else if skip {
+		log.Info("skipping WorkflowWebhook because ConcurrentPolicy==Forbid", "WorkflowWebhook", ww.Namespace+"/"+ww.Name)
+		w.WriteHeader(http.StatusAlreadyReported)
+		w.Write([]byte(http.StatusText(http.StatusAlreadyReported)))
+		return
+	}
+
 	// Create a WorkflowWebhookRequest
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
@@ -215,4 +227,58 @@ func getNameAndNamespaceFromPath(path string) (name string, namespace string, er
 	namespace = m[re.SubexpIndex("namespace")]
 	name = m[re.SubexpIndex("name")]
 	return
+}
+
+// Determines whether to skip the creation of a new WorkflowWebhookRequest based
+// on WorkflowWebhook.Spec.ConcurrencyPolicy. Allows by default.
+func applyConcurrencyPolicy(
+	c client.Client,
+	ctx context.Context,
+	ww *simplecicdv1alpha1.WorkflowWebhook,
+) (skip bool, err error) {
+	if ww == nil || ww.Spec.ConcurrencyPolicy == nil || *ww.Spec.ConcurrencyPolicy == simplecicdv1alpha1.Allow {
+		// By default, allow the creation of a new WorkflowWebhookRequest.
+		return false, nil
+	}
+
+	// Fetch not done WorkflowWebhookRequests instances with the same WorkflowWebhook.
+	allWwr := &simplecicdv1alpha1.WorkflowWebhookRequestList{}
+	if err := c.List(ctx, allWwr, &client.ListOptions{
+		Namespace: ww.Namespace,
+	}); err != nil {
+		return false, err
+	}
+	//TODO: Filter by List. Maybe FieldSelector for CRD?
+	wwrList := filterWWRByWW(allWwr.Items, ww)
+
+	switch *ww.Spec.ConcurrencyPolicy {
+	case simplecicdv1alpha1.Forbid:
+		if len(wwrList) > 0 {
+			// Skip creating a new WorkflowWebhookRequest because, at least, an older one is already running.
+			return true, nil
+		}
+	case simplecicdv1alpha1.Replace:
+		// Delete old WorkflowWebhookRequest instances with the same WorkflowWebhook.
+		for _, wwr := range wwrList {
+			if err := c.Delete(ctx, &wwr); err != nil {
+				emsg := fmt.Errorf("can not delete old WorkflowWebhookRequest %s/%s", wwr.Namespace, wwr.Name)
+				log.Error(err, emsg.Error())
+				return false, errors.Join(err, emsg)
+			}
+		}
+	}
+
+	return false, nil
+}
+
+func filterWWRByWW(items []simplecicdv1alpha1.WorkflowWebhookRequest, ww *simplecicdv1alpha1.WorkflowWebhook) []simplecicdv1alpha1.WorkflowWebhookRequest {
+	filtered := []simplecicdv1alpha1.WorkflowWebhookRequest{}
+	for _, wwr := range items {
+		if wwr.Spec.WorkflowWebhook.Namespace == &ww.Namespace &&
+			wwr.Spec.WorkflowWebhook.Name == wwr.Name &&
+			wwr.Status.Done {
+			filtered = append(filtered, wwr)
+		}
+	}
+	return filtered
 }

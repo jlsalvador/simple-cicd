@@ -29,7 +29,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	apilabels "k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -311,7 +310,7 @@ func (r *WorkflowWebhookRequestReconciler) reconcileCurrentJobs(ctx context.Cont
 
 func (r *WorkflowWebhookRequestReconciler) createJob(
 	ctx context.Context,
-	jtbc simplecicdv1alpha1.JobsToBeCloned,
+	jtbc simplecicdv1alpha1.NamespacedName,
 	wwr *simplecicdv1alpha1.WorkflowWebhookRequest,
 	workflow *simplecicdv1alpha1.Workflow,
 	jobIndex int,
@@ -329,15 +328,6 @@ func (r *WorkflowWebhookRequestReconciler) createJob(
 		wwr.Namespace,
 		wwr.Name,
 	)
-
-	// Check ConcurrencyPolicy
-	if skip, err := r.checkConcurrencyPolicy(ctx, jtbc.ConcurrencyPolicy, labels); err != nil {
-		emsg := errors.New("error while checking ConcurrencyPolicy")
-		wwrLog.Error(err, emsg.Error())
-		return errors.Join(err, emsg)
-	} else if skip {
-		return nil
-	}
 
 	job := &batchv1.Job{}
 	if err := r.Get(ctx, types.NamespacedName{
@@ -394,48 +384,6 @@ func (r *WorkflowWebhookRequestReconciler) createJob(
 	wwr.Status.CurrentJobs = append(wwr.Status.CurrentJobs, newJobNamespacedName)
 	wwrLog.Info("Added Job", "Job", newJobNamespacedName)
 	return nil
-}
-
-// Determines whether to skip the creation of a new Job based on
-// the provided concurrencyPolicy and labels.
-func (r *WorkflowWebhookRequestReconciler) checkConcurrencyPolicy(
-	ctx context.Context,
-	concurrentPolicy *simplecicdv1alpha1.ConcurrencyPolicy,
-	labels map[string]string,
-) (skip bool, err error) {
-	if concurrentPolicy == nil || *concurrentPolicy == simplecicdv1alpha1.Allow {
-		// By default, allow the creation of a new Job.
-		return false, nil
-	}
-
-	// Fetch Job instances from other WorkflowWebhookRequests with matching labels.
-	jobList := &batchv1.JobList{}
-	if err := r.List(ctx, jobList, &client.ListOptions{
-		LabelSelector: apilabels.Set(labels).AsSelector(),
-	}, &client.ListOptions{
-		Namespace: labels[LabelJobNamespace],
-	}); err != nil {
-		return false, err
-	}
-
-	switch *concurrentPolicy {
-	case simplecicdv1alpha1.Forbid:
-		if len(jobList.Items) > 0 {
-			// Skip creating a new Job because an older one is already running.
-			return true, nil
-		}
-	case simplecicdv1alpha1.Replace:
-		// Delete Job instances from other WorkflowWebhookRequests.
-		for _, job := range jobList.Items {
-			if err := r.Delete(ctx, &job); err != nil {
-				emsg := fmt.Errorf("can not delete old job %s/%s", job.Namespace, job.Name)
-				wwrLog.Error(err, emsg.Error())
-				return false, errors.Join(err, emsg)
-			}
-		}
-	}
-
-	return false, nil
 }
 
 // If WorkflowWebhookRequest has some queued Jobs, check their status, requeue it
