@@ -416,9 +416,10 @@ func (r *WorkflowWebhookRequestReconciler) checkCurrentJobs(ctx context.Context,
 	}
 
 	numJobs := len(wwr.Status.CurrentJobs) // Save this value for later because we will empty WrokflowWebhookRequest.Spec.CurrentJobs
-	numErrors := 0
-	for _, jobNamespacedName := range wwr.Status.CurrentJobs {
+	numSuccessful := 0
+	numFailures := 0
 
+	for _, jobNamespacedName := range wwr.Status.CurrentJobs {
 		job := &batchv1.Job{}
 		if err := r.Get(ctx, jobNamespacedName.AsType(wwr.Namespace), job); err != nil {
 			emsg := fmt.Errorf(`can not fetch Job "%s"`, jobNamespacedName)
@@ -426,13 +427,18 @@ func (r *WorkflowWebhookRequestReconciler) checkCurrentJobs(ctx context.Context,
 			return false, errors.Join(err, emsg)
 		}
 
-		// If Job is no done requeue WorkflowWebhookRequest
 		isDone, isError := jobStatus(job)
+
 		if !isDone {
 			wwrLog.Info("Job is running, requeue reconciliation", "Job", jobNamespacedName)
 			return true, nil
-		} else if isError {
-			numErrors++
+		}
+
+		// Job.Status.Conditions.Type counter
+		if isError {
+			numFailures++
+		} else {
+			numSuccessful++
 		}
 	}
 
@@ -444,7 +450,7 @@ func (r *WorkflowWebhookRequestReconciler) checkCurrentJobs(ctx context.Context,
 
 	// Set next Workflows as current Workflows
 	for _, nextWorkflowNamespacedName := range wwr.Status.NextWorkflows {
-		if isConditionWhenValid(nextWorkflowNamespacedName.When, numJobs, numErrors) {
+		if isConditionWhenValid(nextWorkflowNamespacedName.When, numJobs, numFailures) {
 			// Add next workflow as current
 			wwr.Status.CurrentWorkflows = append(wwr.Status.CurrentWorkflows, nextWorkflowNamespacedName.AsNamespacedName())
 		}
@@ -458,26 +464,22 @@ func (r *WorkflowWebhookRequestReconciler) checkCurrentJobs(ctx context.Context,
 	var newCondition simplecicdv1alpha1.Condition
 	numWorkflows := len(wwr.Status.CurrentWorkflows)
 	if numWorkflows == 0 {
-		// Do not requeue WorkflowWebhookRequest, there are not more Workflows
-		requeue = false
+		requeue = false        // Do not requeue WorkflowWebhookRequest, there are not more Workflows
 		wwr.Status.Done = true // This WorkflowWebhookRequest is Done, no more Workflows
-
 		newCondition = simplecicdv1alpha1.Condition{
 			Type:               string(simplecicdv1alpha1.WorkflowWebhookRequestDone),
 			Status:             simplecicdv1alpha1.ConditionTrue,
 			Reason:             "Reconciling",
-			Message:            fmt.Sprintf("Every Job is done with %d errors", numErrors),
+			Message:            fmt.Sprintf("%d Job(s) is done with %d successful and %d failures", numJobs, numSuccessful, numFailures),
 			LastTransitionTime: metav1.Now(),
 		}
 	} else {
-		// Requeue WorkflowWebhookRequest because there are new Workflows
-		requeue = true
-
+		requeue = true // Requeue WorkflowWebhookRequest because there are new Workflows
 		newCondition = simplecicdv1alpha1.Condition{
 			Type:               string(simplecicdv1alpha1.WorkflowWebhookRequestProgressing),
 			Status:             simplecicdv1alpha1.ConditionUnknown,
 			Reason:             "Reconciling",
-			Message:            fmt.Sprintf("%d workflows queued", numWorkflows),
+			Message:            fmt.Sprintf("%d workflow(s) queued", numWorkflows),
 			LastTransitionTime: metav1.Now(),
 		}
 	}
@@ -487,7 +489,6 @@ func (r *WorkflowWebhookRequestReconciler) checkCurrentJobs(ctx context.Context,
 		return false, err
 	}
 
-	// We are done
 	return requeue, nil
 }
 
@@ -517,11 +518,11 @@ func (r *WorkflowWebhookRequestReconciler) updateWwr(ctx context.Context, wwr *s
 //   - If 'when' is 'OnAnyFailure' or 'OnAnySuccess', it returns true if there are errors (nErrors > 0) but not all jobs have failed (nErrors < nJobs).
 //   - If 'when' is 'OnSuccess' or 'OnAnySuccess', it returns true if there are no errors (nErrors == 0).
 //   - If 'when' is 'OnFailure' or 'OnAnyFailure', it returns true if all jobs have failed (nErrors == nJobs).
-func isConditionWhenValid(when *simplecicdv1alpha1.When, nJobs int, nErrors int) bool {
+func isConditionWhenValid(when *simplecicdv1alpha1.When, nJobs int, nFailures int) bool {
 	return (when == nil || *when == simplecicdv1alpha1.Always) ||
-		(nErrors > 0 && nErrors < nJobs && (*when == simplecicdv1alpha1.OnAnyFailure || *when == simplecicdv1alpha1.OnAnySuccess)) ||
-		(nErrors == 0 && (*when == simplecicdv1alpha1.OnSuccess || *when == simplecicdv1alpha1.OnAnySuccess)) ||
-		(nErrors == nJobs && (*when == simplecicdv1alpha1.OnFailure || *when == simplecicdv1alpha1.OnAnyFailure))
+		(nFailures > 0 && nFailures < nJobs && (*when == simplecicdv1alpha1.OnAnyFailure || *when == simplecicdv1alpha1.OnAnySuccess)) ||
+		(nFailures == 0 && (*when == simplecicdv1alpha1.OnSuccess || *when == simplecicdv1alpha1.OnAnySuccess)) ||
+		(nFailures == nJobs && (*when == simplecicdv1alpha1.OnFailure || *when == simplecicdv1alpha1.OnAnyFailure))
 }
 
 // Returns if Job is Done and if it is Failed
