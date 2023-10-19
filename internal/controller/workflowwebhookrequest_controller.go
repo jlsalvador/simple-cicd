@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -35,15 +36,22 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
+	"github.com/go-logr/logr"
 	simplecicdv1alpha1 "github.com/jlsalvador/simple-cicd/api/v1alpha1"
 	"github.com/jlsalvador/simple-cicd/internal/common"
 	"github.com/jlsalvador/simple-cicd/internal/rfc1123"
 )
 
-const (
-	// Duration to the next reconciliation.
-	requeueAfter = time.Millisecond * 500 // 0.5s
-)
+var DEBUG = false
+
+// Duration to the next reconciliation.
+var requeueAfter = func() time.Duration {
+	if DEBUG {
+		return time.Second * 10
+	} else {
+		return time.Millisecond * 500
+	}
+}()
 
 // Label key names
 var (
@@ -58,11 +66,20 @@ var (
 )
 
 var wwrLog = ctrl.Log.WithName("workflowWebhookRequest controller")
-var wwrLogDebug = zap.New(
-	zap.UseDevMode(true),
-	zap.Level(zapcore.DebugLevel),
-	// zap.WriteTo(io.Discard),
-)
+var wwrLogDebug = func() logr.Logger {
+	if DEBUG {
+		return zap.New(
+			zap.UseDevMode(true),
+			zap.Level(zapcore.DebugLevel),
+		)
+	} else {
+		return zap.New(
+			zap.UseDevMode(true),
+			zap.Level(zapcore.DebugLevel),
+			zap.WriteTo(io.Discard),
+		)
+	}
+}()
 
 // WorkflowWebhookRequestReconciler reconciles a WorkflowWebhookRequest object
 type WorkflowWebhookRequestReconciler struct {
