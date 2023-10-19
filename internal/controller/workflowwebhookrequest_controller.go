@@ -65,6 +65,8 @@ var (
 	LabelJobName                         = simplecicdv1alpha1.GroupVersion.Group + "/from-job-name"
 )
 
+const conditionMessageWaitingForCurrentJobs = "Waiting for current jobs"
+
 var wwrLog = ctrl.Log.WithName("workflowWebhookRequest controller")
 var wwrLogDebug = func() logr.Logger {
 	if DEBUG {
@@ -312,13 +314,16 @@ func (r *WorkflowWebhookRequestReconciler) reconcileCurrentJobs(ctx context.Cont
 		}
 	}
 
-	wwr.Status.Conditions = append(wwr.Status.Conditions, simplecicdv1alpha1.Condition{
-		Type:               string(simplecicdv1alpha1.WorkflowWebhookRequestWaiting),
-		Status:             simplecicdv1alpha1.ConditionUnknown,
-		Reason:             "Reconciling",
-		Message:            "Waiting for current jobs",
-		LastTransitionTime: metav1.Now(),
-	})
+	if len(wwr.Status.Conditions) > 0 && wwr.Status.Conditions[len(wwr.Status.Conditions)-1].Message != conditionMessageWaitingForCurrentJobs {
+		wwr.Status.Conditions = append(wwr.Status.Conditions, simplecicdv1alpha1.Condition{
+			Type:               string(simplecicdv1alpha1.WorkflowWebhookRequestWaiting),
+			Status:             simplecicdv1alpha1.ConditionUnknown,
+			Reason:             "Reconciling",
+			Message:            conditionMessageWaitingForCurrentJobs,
+			LastTransitionTime: metav1.Now(),
+		})
+	}
+
 	err = r.updateWwr(ctx, wwr)
 
 	// Requeue if there is not error
