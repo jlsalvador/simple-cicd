@@ -28,6 +28,15 @@ If you have forked the Simple CI/CD repository and want to install it from your 
 kubectl apply -k config/default
 ```
 
+### Installation by Helm
+
+Available soon.
+
+```sh
+helm repo add simple-cicd https://jlsalvador.github.io/simple-cicd
+helm install simple-cicd simple-cicd/simple-cicd
+```
+
 
 ## Description
 
@@ -344,16 +353,6 @@ The motivation behind developing Simple CI/CD arises from the need for a tool th
     </tr>
   </tbody>
 </table>
-
-
-### Installation by Helm
-
-Available soon.
-
-```sh
-helm repo add simple-cicd https://jlsalvador.github.io/simple-cicd
-helm install simple-cicd simple-cicd/sinple-cicd
-```
 
 
 ## Contributing
