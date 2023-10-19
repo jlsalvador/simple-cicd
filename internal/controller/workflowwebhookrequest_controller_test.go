@@ -34,22 +34,33 @@ import (
 const contentTypeJson = "application/json"
 
 var _ = Describe("WorkflowWebhookRequest controller", func() {
-	for _, ww := range []*simplecicdv1alpha1.WorkflowWebhook{
-		workflowWebhookNormal,
-		workflowWebhookSuspended,
-		workflowWebhookForbid,
-		workflowWebhookReplace,
+	type tdt struct {
+		ww              *simplecicdv1alpha1.WorkflowWebhook
+		iterations      int
+		nSuccessfulJobs int
+		nFailedJobs     int
+	}
+	for _, tt := range []tdt{
+		{workflowWebhookNormal, 2, 7, 3},
+		{workflowWebhookSuspended, 1, 0, 0},
+		{workflowWebhookForbid, 1, 1, 0},
+		{workflowWebhookReplace, 1, 1, 0},
 	} {
-		wwLoopvar := ww // Doc: https://github.com/golang/go/wiki/LoopvarExperiment
+		// Doc: https://github.com/golang/go/wiki/LoopvarExperiment
+		wwLoopvar := tt.ww
+		iterationsLoopvar := tt.iterations
+		nSuccessfulJobsLoopvar := tt.nSuccessfulJobs
+		nFailedJobsLoopvar := tt.nFailedJobs
+
 		Context("WorkflowWebhookRequest "+wwLoopvar.ObjectMeta.Name, func() {
-			It("Should finish", func(ctx SpecContext) {
-				testWw(wwLoopvar)
+			It("Should finish correctly", func(ctx SpecContext) {
+				testWw(wwLoopvar, iterationsLoopvar, nSuccessfulJobsLoopvar, nFailedJobsLoopvar)
 			}, NodeTimeout(nodeTimeout))
 		})
 	}
 })
 
-func testWw(ww *simplecicdv1alpha1.WorkflowWebhook) {
+func testWw(ww *simplecicdv1alpha1.WorkflowWebhook, iterations int, nSuccessfulJobs int, nFailedJobs int) {
 	var pr *simplecicdv1alpha1.NamespacedName
 	By(fmt.Sprintf("By trigger the creation of %s/%s through listener and reading payload", ww.Namespace, ww.Name), func() {
 		url := fmt.Sprintf(
@@ -91,6 +102,7 @@ func testWw(ww *simplecicdv1alpha1.WorkflowWebhook) {
 			}, timeout, interval).Should(Succeed())
 
 			wwrLog.Info(fmt.Sprintf("WorkflowWebhookRequest %s", wwrnn), "CurrentJobs", wwr.Status.CurrentJobs)
+
 			for _, jn := range wwr.Status.CurrentJobs {
 				// Fetch Job
 				job := &batchv1.Job{}
@@ -99,18 +111,18 @@ func testWw(ww *simplecicdv1alpha1.WorkflowWebhook) {
 					return err == nil && job != nil
 				}, timeout, interval).Should(BeTrue())
 
-				// Simulate Job Complete
-				var condition batchv1.JobCondition
+				// Simulate Job completion
+				condition := batchv1.JobCondition{
+					Type:   batchv1.JobComplete,
+					Status: corev1.ConditionTrue,
+				}
 				if job.ObjectMeta.Labels[LabelJobName] == jobFailure.Name {
 					condition = batchv1.JobCondition{
 						Type:   batchv1.JobFailed,
 						Status: corev1.ConditionTrue,
 					}
-				} else {
-					condition = batchv1.JobCondition{
-						Type:   batchv1.JobComplete,
-						Status: corev1.ConditionTrue,
-					}
+					// } else if job.ObjectMeta.Labels[LabelJobName] == jobWait.Name {
+					// 	time.Sleep(time.Second * 5)
 				}
 				job.Status.Conditions = append(job.Status.Conditions, condition)
 				err := k8sClient.Status().Update(ctx, job)
@@ -120,6 +132,15 @@ func testWw(ww *simplecicdv1alpha1.WorkflowWebhook) {
 			return wwr.Status.Done
 		}, nodeTimeout, interval).Should(BeTrue())
 	})
+
+	By("Checking total iterations")
+	Expect(wwr.Status.Iterations).Should(Equal(iterations))
+
+	By("Checking total successful jobs")
+	Expect(wwr.Status.SuccessfulJobs).Should(Equal(nSuccessfulJobs))
+
+	By("Checking total failed jobs")
+	Expect(wwr.Status.FailedJobs).Should(Equal(nFailedJobs))
 
 	By(fmt.Sprintf("Deleting the WorkflowWebhookRequest %s", wwrnn))
 	Expect(k8sClient.Delete(ctx, wwr)).Should(Succeed())
