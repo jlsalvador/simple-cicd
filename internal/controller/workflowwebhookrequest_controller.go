@@ -416,9 +416,7 @@ func (r *WorkflowWebhookRequestReconciler) checkCurrentJobs(ctx context.Context,
 	}
 
 	numJobs := len(wwr.Status.CurrentJobs) // Save this value for later because we will empty WrokflowWebhookRequest.Spec.CurrentJobs
-	numSuccessful := 0
-	numFailures := 0
-
+	numFailuresCurrentLoop := 0
 	for _, jobNamespacedName := range wwr.Status.CurrentJobs {
 		job := &batchv1.Job{}
 		if err := r.Get(ctx, jobNamespacedName.AsType(wwr.Namespace), job); err != nil {
@@ -436,9 +434,10 @@ func (r *WorkflowWebhookRequestReconciler) checkCurrentJobs(ctx context.Context,
 
 		// Job.Status.Conditions.Type counter
 		if isError {
-			numFailures++
+			wwr.Status.FailedJobs++
+			numFailuresCurrentLoop++
 		} else {
-			numSuccessful++
+			wwr.Status.SuccessfulJobs++
 		}
 	}
 
@@ -450,7 +449,7 @@ func (r *WorkflowWebhookRequestReconciler) checkCurrentJobs(ctx context.Context,
 
 	// Set next Workflows as current Workflows
 	for _, nextWorkflowNamespacedName := range wwr.Status.NextWorkflows {
-		if isConditionWhenValid(nextWorkflowNamespacedName.When, numJobs, numFailures) {
+		if isConditionWhenValid(nextWorkflowNamespacedName.When, numJobs, numFailuresCurrentLoop) {
 			// Add next workflow as current
 			wwr.Status.CurrentWorkflows = append(wwr.Status.CurrentWorkflows, nextWorkflowNamespacedName.AsNamespacedName())
 		}
@@ -470,7 +469,7 @@ func (r *WorkflowWebhookRequestReconciler) checkCurrentJobs(ctx context.Context,
 			Type:               string(simplecicdv1alpha1.WorkflowWebhookRequestDone),
 			Status:             simplecicdv1alpha1.ConditionTrue,
 			Reason:             "Reconciling",
-			Message:            fmt.Sprintf("%d Job(s) is done with %d successful and %d failures", numJobs, numSuccessful, numFailures),
+			Message:            fmt.Sprintf("%d Job(s) is done with %d successful and %d failures", numJobs, wwr.Status.SuccessfulJobs, wwr.Status.FailedJobs),
 			LastTransitionTime: metav1.Now(),
 		}
 	} else {

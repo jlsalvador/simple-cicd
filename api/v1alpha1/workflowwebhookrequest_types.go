@@ -91,6 +91,14 @@ type WorkflowWebhookRequestStatus struct {
 	// +optional
 	NextWorkflows []NextWorkflow `json:"nextWorkflows,omitempty"`
 
+	// Number of successful Jobs owned by this WorkflowWebhookRequest.
+	// +optional
+	SuccessfulJobs int `json:"successfulJobs"`
+
+	// Number of failed Jobs owned by this WorkflowWebhookRequest.
+	// +optional
+	FailedJobs int `json:"failedJobs"`
+
 	// When set to true, instructs the operator to skip
 	// this WorkflowWebhookRequest during future reconciliations.
 	// +optional
@@ -113,8 +121,10 @@ type WorkflowWebhookRequestStatus struct {
 
 // WorkflowWebhookRequest is the Schema for the workflowwebhookrequests API
 // +kubebuilder:resource:shortName=wwr
-// +kubebuilder:printcolumn:name="Done",type="boolean",JSONPath=`.status.done`
-// +kubebuilder:printcolumn:name="Current Jobs",type=string,JSONPath=`.status.currentJobs`
+// +kubebuilder:printcolumn:name="Done",type="boolean",JSONPath=`.status.done`,description="True when there are not more Jobs to do"
+// +kubebuilder:printcolumn:name="Successful Jobs",type=string,JSONPath=`.status.successfulJobs`,description="Total number of sucessful Jobs"
+// +kubebuilder:printcolumn:name="Failed Jobs",type=string,JSONPath=`.status.failedJobs`,description="Total number of failed Jobs"
+// +kubebuilder:printcolumn:name="Current Jobs",type=string,JSONPath=`.status.currentJobs`,priority=1,description="Waiting for these Jobs to be done"
 type WorkflowWebhookRequest struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

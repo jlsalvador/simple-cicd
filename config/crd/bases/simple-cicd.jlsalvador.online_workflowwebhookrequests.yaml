@@ -17,11 +17,22 @@ spec:
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
-    - jsonPath: .status.done
+    - description: True when there are not more Jobs to do
+      jsonPath: .status.done
       name: Done
       type: boolean
-    - jsonPath: .status.currentJobs
+    - description: Total number of sucessful Jobs
+      jsonPath: .status.successfulJobs
+      name: Successful Jobs
+      type: string
+    - description: Total number of failed Jobs
+      jsonPath: .status.failedJobs
+      name: Failed Jobs
+      type: string
+    - description: Waiting for these Jobs to be done
+      jsonPath: .status.currentJobs
       name: Current Jobs
+      priority: 1
       type: string
     name: v1alpha1
     schema:
@@ -145,6 +156,9 @@ spec:
                 description: When set to true, instructs the operator to skip this
                   WorkflowWebhookRequest during future reconciliations.
                 type: boolean
+              failedJobs:
+                description: Number of failed Jobs owned by this WorkflowWebhookRequest.
+                type: integer
               nextWorkflows:
                 description: List of the next Workflows to be triggered by this WorkflowWebhookRequest.
                 items:
@@ -176,6 +190,9 @@ spec:
                   - name
                   type: object
                 type: array
+              successfulJobs:
+                description: Number of successful Jobs owned by this WorkflowWebhookRequest.
+                type: integer
             type: object
         type: object
     served: true
