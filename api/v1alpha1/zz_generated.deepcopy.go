@@ -348,13 +348,6 @@ func (in *WorkflowWebhookRequestStatus) DeepCopyInto(out *WorkflowWebhookRequest
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
 	}
-	if in.NextWorkflows != nil {
-		in, out := &in.NextWorkflows, &out.NextWorkflows
-		*out = make([]NextWorkflow, len(*in))
-		for i := range *in {
-			(*in)[i].DeepCopyInto(&(*out)[i])
-		}
-	}
 	if in.Conditions != nil {
 		in, out := &in.Conditions, &out.Conditions
 		*out = make([]Condition, len(*in))

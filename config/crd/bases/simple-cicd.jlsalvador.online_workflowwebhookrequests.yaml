@@ -21,6 +21,11 @@ spec:
       jsonPath: .status.done
       name: Done
       type: boolean
+    - description: How many times CurrentWorkflows have been done
+      jsonPath: .status.iterations
+      name: Iterations
+      priority: 1
+      type: string
     - description: Total number of sucessful Jobs
       jsonPath: .status.successfulJobs
       name: Successful Jobs
@@ -159,40 +164,14 @@ spec:
               failedJobs:
                 description: Number of failed Jobs owned by this WorkflowWebhookRequest.
                 type: integer
-              nextWorkflows:
-                description: List of the next Workflows to be triggered by this WorkflowWebhookRequest.
-                items:
-                  properties:
-                    name:
-                      description: Workflow name
-                      type: string
-                    namespace:
-                      description: Workflow namespace
-                      type: string
-                    when:
-                      description: "Describes the conditions for when a Job will be
-                        handled. If not specified, the default behavior is \"Always\".
-                        \n Possible statuses: - OnSuccess: The Job will be handled
-                        when all previous Jobs were successful. - OnAnySuccess: The
-                        Job will be handled when any previous Job was successful.
-                        - OnFailure: The Job will be handled when all previous Jobs
-                        were not successful. - OnAnyFailure: The Job will be handled
-                        when any previous Job was not successful. - Always: The Job
-                        will always be handled."
-                      enum:
-                      - OnSuccess
-                      - OnAnySuccess
-                      - OnFailure
-                      - OnAnyFailure
-                      - Always
-                      type: string
-                  required:
-                  - name
-                  type: object
-                type: array
+              iterations:
+                description: Count of how many times CurrentWorkflows have been done.
+                type: integer
               successfulJobs:
                 description: Number of successful Jobs owned by this WorkflowWebhookRequest.
                 type: integer
+            required:
+            - iterations
             type: object
         type: object
     served: true

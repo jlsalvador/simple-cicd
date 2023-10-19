@@ -87,9 +87,8 @@ type WorkflowWebhookRequestStatus struct {
 	// +optional
 	CurrentWorkflows []NamespacedName `json:"currentWorkflows,omitempty"`
 
-	// List of the next Workflows to be triggered by this WorkflowWebhookRequest.
-	// +optional
-	NextWorkflows []NextWorkflow `json:"nextWorkflows,omitempty"`
+	// Count of how many times CurrentWorkflows have been done.
+	Iterations int `json:"iterations"`
 
 	// Number of successful Jobs owned by this WorkflowWebhookRequest.
 	// +optional
@@ -122,6 +121,7 @@ type WorkflowWebhookRequestStatus struct {
 // WorkflowWebhookRequest is the Schema for the workflowwebhookrequests API
 // +kubebuilder:resource:shortName=wwr
 // +kubebuilder:printcolumn:name="Done",type="boolean",JSONPath=`.status.done`,description="True when there are not more Jobs to do"
+// +kubebuilder:printcolumn:name="Iterations",type=string,JSONPath=`.status.iterations`,priority=1,description="How many times CurrentWorkflows have been done"
 // +kubebuilder:printcolumn:name="Successful Jobs",type=string,JSONPath=`.status.successfulJobs`,description="Total number of sucessful Jobs"
 // +kubebuilder:printcolumn:name="Failed Jobs",type=string,JSONPath=`.status.failedJobs`,description="Total number of failed Jobs"
 // +kubebuilder:printcolumn:name="Current Jobs",type=string,JSONPath=`.status.currentJobs`,priority=1,description="Waiting for these Jobs to be done"
