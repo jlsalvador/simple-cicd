@@ -1,7 +1,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: job-sample-hello
+  name: echo-hello
 spec:
   suspend: true # The field suspend is required to be true to disallow Kubernetes to start this job when it will be created
   ttlSecondsAfterFinished: 300
@@ -16,7 +16,7 @@ spec:
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: job-sample-hi
+  name: echo-hi
 spec:
   suspend: true # The field suspend is required to be true to disallow Kubernetes to start this job when it will be created
   ttlSecondsAfterFinished: 300
@@ -31,7 +31,7 @@ spec:
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: job-sample-random-exit
+  name: exit-random
 spec:
   suspend: true # The field suspend is required to be true to disallow Kubernetes to start this job when it will be created
   ttlSecondsAfterFinished: 300
@@ -47,7 +47,7 @@ spec:
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: job-sample-all-ok
+  name: echo-all-ok
 spec:
   suspend: true # The field suspend is required to be true to disallow Kubernetes to start this job when it will be created
   ttlSecondsAfterFinished: 300
@@ -62,7 +62,7 @@ spec:
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: job-sample-all-bad
+  name: echo-all-bad
 spec:
   suspend: true # The field suspend is required to be true to disallow Kubernetes to start this job when it will be created
   ttlSecondsAfterFinished: 300
@@ -77,7 +77,7 @@ spec:
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: job-sample-some-successes
+  name: echo-some-successes
 spec:
   suspend: true # The field suspend is required to be true to disallow Kubernetes to start this job when it will be created
   ttlSecondsAfterFinished: 300
@@ -92,7 +92,7 @@ spec:
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: job-sample-some-failures
+  name: echo-some-failures
 spec:
   suspend: true # The field suspend is required to be true to disallow Kubernetes to start this job when it will be created
   ttlSecondsAfterFinished: 300
@@ -107,7 +107,7 @@ spec:
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: job-sample-bye
+  name: echo-bye
 spec:
   suspend: true # The field suspend is required to be true to disallow Kubernetes to start this job when it will be created
   ttlSecondsAfterFinished: 300

@@ -1,19 +1,13 @@
 apiVersion: simple-cicd.jlsalvador.online/v1alpha1
 kind: WorkflowWebhookRequest
 metadata:
-  labels:
-    app.kubernetes.io/name: workflowwebhookrequest
-    app.kubernetes.io/instance: workflowwebhookrequest-sample
-    app.kubernetes.io/part-of: simple-cicd
-    app.kubernetes.io/managed-by: kustomize
-    app.kubernetes.io/created-by: simple-cicd
-  name: workflowwebhookrequest-sample
+  name: sample
 spec:
   workflowWebhook:
-    name: workflowwebhook-sample
+    name: sample
   host: simplecicd-controller-manager.simplecicd-system:9000
   method: GET
-  url: /default/workflowwebhook-sample
+  url: /default/sample
   headers:
     Authorization:
       - Bearer

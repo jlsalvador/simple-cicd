@@ -1,150 +1,96 @@
 apiVersion: simple-cicd.jlsalvador.online/v1alpha1
 kind: Workflow
 metadata:
-  labels:
-    app.kubernetes.io/name: workflow
-    app.kubernetes.io/instance: workflow-sample
-    app.kubernetes.io/part-of: simple-cicd
-    app.kubernetes.io/managed-by: kustomize
-    app.kubernetes.io/created-by: simple-cicd
-  name: workflow-sample-hello
+  name: hello
 spec:
   jobsToBeCloned:
-    - name: job-sample-hello
+    - name: echo-hello
   next:
-    - name: workflow-sample-random
+    - name: random
       # when: # when is optional, by default is "Always"
 ---
 apiVersion: simple-cicd.jlsalvador.online/v1alpha1
 kind: Workflow
 metadata:
-  labels:
-    app.kubernetes.io/name: workflow
-    app.kubernetes.io/instance: workflow-sample
-    app.kubernetes.io/part-of: simple-cicd
-    app.kubernetes.io/managed-by: kustomize
-    app.kubernetes.io/created-by: simple-cicd
-  name: workflow-sample-hi
+  name: hi
 spec:
   jobsToBeCloned:
-    - name: job-sample-hi
+    - name: echo-hi
 ---
 apiVersion: simple-cicd.jlsalvador.online/v1alpha1
 kind: Workflow
 metadata:
-  labels:
-    app.kubernetes.io/name: workflow
-    app.kubernetes.io/instance: workflow-sample
-    app.kubernetes.io/part-of: simple-cicd
-    app.kubernetes.io/managed-by: kustomize
-    app.kubernetes.io/created-by: simple-cicd
-  name: workflow-sample-random
+  name: random
 spec:
   jobsToBeCloned:
-    - name: job-sample-random-exit
-    - name: job-sample-random-exit
+    - name: exit-random
+    - name: exit-random
   next:
-    - name: workflow-sample-all-ok
+    - name: all-ok
       when: OnSuccess
-    - name: workflow-sample-all-bad
+    - name: all-bad
       when: OnFailure
-    - name: workflow-sample-some-successes
+    - name: some-successes
       when: OnAnySuccess
-    - name: workflow-sample-some-failures
+    - name: some-failures
       when: OnAnyFailure
 ---
 apiVersion: simple-cicd.jlsalvador.online/v1alpha1
 kind: Workflow
 metadata:
-  labels:
-    app.kubernetes.io/name: workflow
-    app.kubernetes.io/instance: workflow-sample
-    app.kubernetes.io/part-of: simple-cicd
-    app.kubernetes.io/managed-by: kustomize
-    app.kubernetes.io/created-by: simple-cicd
-  name: workflow-sample-all-ok
+  name: all-ok
 spec:
   jobsToBeCloned:
-    - name: job-sample-all-ok
+    - name: echo-all-ok
   next:
-    - name: workflow-sample-bye
+    - name: bye
       when: Always
 ---
 apiVersion: simple-cicd.jlsalvador.online/v1alpha1
 kind: Workflow
 metadata:
-  labels:
-    app.kubernetes.io/name: workflow
-    app.kubernetes.io/instance: workflow-sample
-    app.kubernetes.io/part-of: simple-cicd
-    app.kubernetes.io/managed-by: kustomize
-    app.kubernetes.io/created-by: simple-cicd
-  name: workflow-sample-all-bad
+  name: all-bad
 spec:
   jobsToBeCloned:
-    - name: job-sample-all-bad
+    - name: echo-all-bad
   next:
-    - name: workflow-sample-bye
+    - name: bye
       when: Always
 ---
 apiVersion: simple-cicd.jlsalvador.online/v1alpha1
 kind: Workflow
 metadata:
-  labels:
-    app.kubernetes.io/name: workflow
-    app.kubernetes.io/instance: workflow-sample
-    app.kubernetes.io/part-of: simple-cicd
-    app.kubernetes.io/managed-by: kustomize
-    app.kubernetes.io/created-by: simple-cicd
-  name: workflow-sample-some-successes
+  name: some-successes
 spec:
   jobsToBeCloned:
-    - name: job-sample-some-successes
+    - name: echo-some-successes
   next:
-    - name: workflow-sample-bye
+    - name: bye
       when: Always
 ---
 apiVersion: simple-cicd.jlsalvador.online/v1alpha1
 kind: Workflow
 metadata:
-  labels:
-    app.kubernetes.io/name: workflow
-    app.kubernetes.io/instance: workflow-sample
-    app.kubernetes.io/part-of: simple-cicd
-    app.kubernetes.io/managed-by: kustomize
-    app.kubernetes.io/created-by: simple-cicd
-  name: workflow-sample-some-failures
+  name: some-failures
 spec:
   jobsToBeCloned:
-    - name: job-sample-some-failures
+    - name: echo-some-failures
   next:
-    - name: workflow-sample-bye
+    - name: bye
       when: Always
 ---
 apiVersion: simple-cicd.jlsalvador.online/v1alpha1
 kind: Workflow
 metadata:
-  labels:
-    app.kubernetes.io/name: workflow
-    app.kubernetes.io/instance: workflow-sample
-    app.kubernetes.io/part-of: simple-cicd
-    app.kubernetes.io/managed-by: kustomize
-    app.kubernetes.io/created-by: simple-cicd
-  name: workflow-sample-bye
+  name: bye
 spec:
   jobsToBeCloned:
-    - name: job-sample-bye
+    - name: echo-bye
 ---
 apiVersion: simple-cicd.jlsalvador.online/v1alpha1
 kind: Workflow
 metadata:
-  labels:
-    app.kubernetes.io/name: workflow
-    app.kubernetes.io/instance: workflow-sample
-    app.kubernetes.io/part-of: simple-cicd
-    app.kubernetes.io/managed-by: kustomize
-    app.kubernetes.io/created-by: simple-cicd
-  name: workflow-sample-suspended
+  name: suspended # This Workflow will not be triggered
 spec:
   jobsToBeCloned:
-    - name: job-sample-hi
+    - name: echo-hi
