@@ -9,7 +9,6 @@ metadata:
     app.kubernetes.io/created-by: simple-cicd
   name: workflow-sample-hello
 spec:
-  suspend: true
   jobsToBeCloned:
     - name: job-sample-hello
   next:
@@ -27,7 +26,6 @@ metadata:
     app.kubernetes.io/created-by: simple-cicd
   name: workflow-sample-hi
 spec:
-  suspend: true
   jobsToBeCloned:
     - name: job-sample-hi
 ---
@@ -42,7 +40,6 @@ metadata:
     app.kubernetes.io/created-by: simple-cicd
   name: workflow-sample-random
 spec:
-  suspend: true
   jobsToBeCloned:
     - name: job-sample-random-exit
     - name: job-sample-random-exit
@@ -67,7 +64,6 @@ metadata:
     app.kubernetes.io/created-by: simple-cicd
   name: workflow-sample-all-ok
 spec:
-  suspend: true
   jobsToBeCloned:
     - name: job-sample-all-ok
   next:
@@ -85,7 +81,6 @@ metadata:
     app.kubernetes.io/created-by: simple-cicd
   name: workflow-sample-all-bad
 spec:
-  suspend: true
   jobsToBeCloned:
     - name: job-sample-all-bad
   next:
@@ -103,7 +98,6 @@ metadata:
     app.kubernetes.io/created-by: simple-cicd
   name: workflow-sample-some-successes
 spec:
-  suspend: true
   jobsToBeCloned:
     - name: job-sample-some-successes
   next:
@@ -121,7 +115,6 @@ metadata:
     app.kubernetes.io/created-by: simple-cicd
   name: workflow-sample-some-failures
 spec:
-  suspend: true
   jobsToBeCloned:
     - name: job-sample-some-failures
   next:
@@ -139,6 +132,19 @@ metadata:
     app.kubernetes.io/created-by: simple-cicd
   name: workflow-sample-bye
 spec:
-  suspend: true
   jobsToBeCloned:
     - name: job-sample-bye
+---
+apiVersion: simple-cicd.jlsalvador.online/v1alpha1
+kind: Workflow
+metadata:
+  labels:
+    app.kubernetes.io/name: workflow
+    app.kubernetes.io/instance: workflow-sample
+    app.kubernetes.io/part-of: simple-cicd
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: simple-cicd
+  name: workflow-sample-suspended
+spec:
+  jobsToBeCloned:
+    - name: job-sample-hi

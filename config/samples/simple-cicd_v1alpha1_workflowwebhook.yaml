@@ -12,3 +12,4 @@ spec:
   workflows:
   - name: workflow-sample-hello
   - name: workflow-sample-hi
+  - name: workflow-sample-suspended
