@@ -40,16 +40,17 @@ var _ = Describe("WorkflowWebhookRequest controller", func() {
 		workflowWebhookForbid,
 		workflowWebhookReplace,
 	} {
-		Context("WorkflowWebhookRequest "+ww.ObjectMeta.Name, func() {
+		wwLoopvar := ww // Doc: https://github.com/golang/go/wiki/LoopvarExperiment
+		Context("WorkflowWebhookRequest "+wwLoopvar.ObjectMeta.Name, func() {
 			It("Should finish", func(ctx SpecContext) {
-				testWw(ww)
+				testWw(wwLoopvar)
 			}, NodeTimeout(nodeTimeout))
 		})
 	}
 })
 
 func testWw(ww *simplecicdv1alpha1.WorkflowWebhook) {
-	pr := &simplecicdv1alpha1.NamespacedName{}
+	var pr *simplecicdv1alpha1.NamespacedName
 	By(fmt.Sprintf("By trigger the creation of %s/%s through listener and reading payload", ww.Namespace, ww.Name), func() {
 		url := fmt.Sprintf(
 			"http://%s/%s/%s",
@@ -63,8 +64,20 @@ func testWw(ww *simplecicdv1alpha1.WorkflowWebhook) {
 		Expect(err).Should(Succeed())
 		defer resp.Body.Close()
 
+		if resp.StatusCode == http.StatusServiceUnavailable {
+			Expect(*ww.Spec.Suspend).Should(BeTrue())
+			return
+		}
+
+		pr = &simplecicdv1alpha1.NamespacedName{}
 		Expect(json.NewDecoder(resp.Body).Decode(pr)).Should(Succeed())
 	})
+
+	if pr == nil {
+		Expect(*ww.Spec.Suspend).Should(BeTrue())
+		return
+	}
+
 	wwrnn := types.NamespacedName{
 		Namespace: *pr.Namespace,
 		Name:      pr.Name,
@@ -77,6 +90,7 @@ func testWw(ww *simplecicdv1alpha1.WorkflowWebhook) {
 				return k8sClient.Get(ctx, wwrnn, wwr)
 			}, timeout, interval).Should(Succeed())
 
+			wwrLog.Info(fmt.Sprintf("WorkflowWebhookRequest %s", wwrnn), "CurrentJobs", wwr.Status.CurrentJobs)
 			for _, jn := range wwr.Status.CurrentJobs {
 				// Fetch Job
 				job := &batchv1.Job{}
@@ -86,10 +100,19 @@ func testWw(ww *simplecicdv1alpha1.WorkflowWebhook) {
 				}, timeout, interval).Should(BeTrue())
 
 				// Simulate Job Complete
-				job.Status.Conditions = append(job.Status.Conditions, batchv1.JobCondition{
-					Type:   batchv1.JobComplete,
-					Status: corev1.ConditionTrue,
-				})
+				var condition batchv1.JobCondition
+				if job.ObjectMeta.Labels[LabelJobName] == jobFailure.Name {
+					condition = batchv1.JobCondition{
+						Type:   batchv1.JobFailed,
+						Status: corev1.ConditionTrue,
+					}
+				} else {
+					condition = batchv1.JobCondition{
+						Type:   batchv1.JobComplete,
+						Status: corev1.ConditionTrue,
+					}
+				}
+				job.Status.Conditions = append(job.Status.Conditions, condition)
 				err := k8sClient.Status().Update(ctx, job)
 				Expect(err).NotTo(HaveOccurred())
 			}

@@ -75,6 +75,8 @@ var (
 	backoffLimit = int32(0)
 	onSuccess    = simplecicdv1alpha1.OnSuccess
 	onFailure    = simplecicdv1alpha1.OnFailure
+	onAnySuccess = simplecicdv1alpha1.OnAnySuccess
+	onAnyFailure = simplecicdv1alpha1.OnAnyFailure
 )
 
 // Jobs
@@ -261,6 +263,10 @@ var (
 				{Name: jobSuccess.ObjectMeta.Name},
 				{Name: jobFailure.ObjectMeta.Name},
 			},
+			Next: []simplecicdv1alpha1.NextWorkflow{
+				{Name: workflowCatRequest.ObjectMeta.Name, When: &onAnySuccess},
+				{Name: workflowCatRequest.ObjectMeta.Name, When: &onAnyFailure},
+			},
 		},
 	}
 	workflowWait = &simplecicdv1alpha1.Workflow{
@@ -311,6 +317,8 @@ var (
 		Spec: simplecicdv1alpha1.WorkflowWebhookSpec{
 			Workflows: []simplecicdv1alpha1.NamespacedName{
 				{Name: workflowAllSuccess.ObjectMeta.Name},
+				{Name: workflowAllSome.ObjectMeta.Name},
+				{Name: workflowAllFails.ObjectMeta.Name},
 				{Name: workflowSuspended.ObjectMeta.Name},
 			},
 		},
