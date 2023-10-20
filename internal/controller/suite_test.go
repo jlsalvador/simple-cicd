@@ -44,11 +44,12 @@ import (
 // http://onsi.github.io/ginkgo/ to learn more about Ginkgo.
 
 var (
-	cfg       *rest.Config
-	k8sClient client.Client
-	testEnv   *envtest.Environment
-	ctx       context.Context
-	cancel    context.CancelCauseFunc
+	cfg             *rest.Config
+	k8sClient       client.Client
+	webhookListener *listener.Webhook
+	testEnv         *envtest.Environment
+	ctx             context.Context
+	cancel          context.CancelCauseFunc
 )
 
 func TestControllers(t *testing.T) {
@@ -96,9 +97,8 @@ var _ = BeforeSuite(func() {
 	})
 	Expect(err).ToNot(HaveOccurred())
 
-	wh, err := listener.New(&listener.Config{
-		//FIXME. Listen on socket or free port
-		Addr:   ":9000",
+	webhookListener, err = listener.New(&listener.Config{
+		Addr:   "127.0.0.1:0", // Listen on any free localhost port
 		Client: k8sManager.GetClient(),
 	})
 	Expect(err).ToNot(HaveOccurred(), "failed to run listener")
@@ -122,7 +122,7 @@ var _ = BeforeSuite(func() {
 	}()
 	go func() {
 		defer GinkgoRecover()
-		err = wh.Start(ctx, cancel)
+		err = webhookListener.Start(ctx, cancel)
 		Expect(err).ToNot(HaveOccurred(), "failed to run listener")
 	}()
 })

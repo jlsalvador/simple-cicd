@@ -41,7 +41,8 @@ type Config struct {
 }
 
 type Webhook struct {
-	config Config
+	config   Config
+	listener net.Listener
 }
 
 var log = ctrl.Log.WithName("workflowWebhook listener")
@@ -53,7 +54,8 @@ func (wc *Webhook) Start(ctx context.Context, cancel context.CancelCauseFunc) er
 
 	// Create listener (with our custom Context) for HTTP server
 	var lc = net.ListenConfig{}
-	ln, err := lc.Listen(ctx, "tcp", wc.config.Addr)
+	var err error
+	wc.listener, err = lc.Listen(ctx, "tcp", wc.config.Addr)
 	if err != nil {
 		return err
 	}
@@ -65,7 +67,7 @@ func (wc *Webhook) Start(ctx context.Context, cancel context.CancelCauseFunc) er
 	}
 	go func() {
 		log.Info("listening for WorkflowWebhooks", "address", wc.config.Addr)
-		if err := h.Serve(ln); err != nil {
+		if err := h.Serve(wc.listener); err != nil {
 			cancel(err)
 		}
 	}()
@@ -74,6 +76,10 @@ func (wc *Webhook) Start(ctx context.Context, cancel context.CancelCauseFunc) er
 	<-ctx.Done()
 	log.Info("shutting down listener for WorkflowWebhooks", "address", wc.config.Addr)
 	return h.Shutdown(ctx)
+}
+
+func (wc *Webhook) Addr() string {
+	return wc.listener.Addr().String()
 }
 
 func New(config *Config) (*Webhook, error) {

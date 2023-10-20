@@ -33,6 +33,8 @@ import (
 	simplecicdv1alpha1 "github.com/jlsalvador/simple-cicd/api/v1alpha1"
 )
 
+const contentTypeJson = "application/json"
+
 var _ = Describe("WorkflowWebhookRequest controller", func() {
 
 	const (
@@ -264,8 +266,15 @@ var _ = Describe("WorkflowWebhookRequest controller", func() {
 			}, timeout, interval).Should(BeTrue())
 
 			By("By trigger the creation of a WorkflowWebhookRequest through listener")
-			//FIXME: Replace hard-coded address
-			resp, err := http.Post(fmt.Sprintf("http://localhost:9000/%s/%s", workflowWebhook.ObjectMeta.Namespace, workflowWebhook.ObjectMeta.Name), "application/json", bytes.NewReader([]byte(`{"username":"john doe","password":"super.Secr3t"}`)))
+			url := fmt.Sprintf(
+				"http://%s/%s/%s",
+				webhookListener.Addr(),
+				workflowWebhook.ObjectMeta.Namespace,
+				workflowWebhook.ObjectMeta.Name,
+			)
+			payload := []byte(`{"username":"john doe","password":"super.Secr3t"}`)
+
+			resp, err := http.Post(url, contentTypeJson, bytes.NewReader(payload))
 			Expect(err).NotTo(HaveOccurred())
 			defer resp.Body.Close()
 
