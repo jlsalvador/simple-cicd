@@ -23,7 +23,6 @@ import (
 	"io"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/go-logr/logr"
 	"go.uber.org/zap/zapcore"
@@ -43,15 +42,6 @@ import (
 )
 
 var DEBUG = false
-
-// Duration to the next reconciliation.
-var requeueAfter = func() time.Duration {
-	if DEBUG {
-		return time.Second * 10
-	} else {
-		return time.Millisecond * 500
-	}
-}()
 
 const conditionMessageWaitingForCurrentJobs = "Waiting for current jobs"
 
@@ -120,19 +110,14 @@ func (r *WorkflowWebhookRequestReconciler) Reconcile(ctx context.Context, req ct
 		return ctrl.Result{}, err
 	}
 
-	if requeue, err := r.reconcileCurrentJobs(ctx, wwr, secret); err != nil {
+	if err := r.reconcileCurrentJobs(ctx, wwr, secret); err != nil {
 		return ctrl.Result{}, err
-	} else if requeue {
-		return ctrl.Result{RequeueAfter: requeueAfter}, nil
 	}
 
-	if requeue, err := r.checkCurrentJobs(ctx, wwr); err != nil {
+	if err := r.checkCurrentJobs(ctx, wwr); err != nil {
 		return ctrl.Result{}, err
-	} else if requeue {
-		return ctrl.Result{RequeueAfter: requeueAfter}, nil
 	}
 
-	// If you are here, WorkflowWebhookRequest has no jobs to do, so do nothing
 	return ctrl.Result{}, nil
 }
 
@@ -241,9 +226,9 @@ func (r *WorkflowWebhookRequestReconciler) reconcileCurrentWorkFlows(ctx context
 }
 
 // Let's just fill the Status.CurrentJobs
-func (r *WorkflowWebhookRequestReconciler) reconcileCurrentJobs(ctx context.Context, wwr *simplecicdv1alpha1.WorkflowWebhookRequest, secret *corev1.Secret) (requeue bool, err error) {
+func (r *WorkflowWebhookRequestReconciler) reconcileCurrentJobs(ctx context.Context, wwr *simplecicdv1alpha1.WorkflowWebhookRequest, secret *corev1.Secret) error {
 	if wwr.Status.CurrentJobs != nil {
-		return false, nil
+		return nil
 	}
 
 	i := 0
@@ -254,7 +239,7 @@ func (r *WorkflowWebhookRequestReconciler) reconcileCurrentJobs(ctx context.Cont
 		if err := r.Get(ctx, workflowNamespacedName.AsType(wwr.Namespace), workflow); err != nil {
 			emsg := fmt.Errorf("can not fetch Workflow %s", workflowNamespacedName)
 			wwrLog.Error(err, emsg.Error())
-			return false, errors.Join(err, emsg)
+			return errors.Join(err, emsg)
 		}
 
 		// Skip suspended Workflow
@@ -273,7 +258,7 @@ func (r *WorkflowWebhookRequestReconciler) reconcileCurrentJobs(ctx context.Cont
 			if err := r.createJob(ctx, jtbc, wwr, workflow, i, secret); err != nil {
 				emsg := fmt.Errorf("something happened while cloning job %s", jtbc)
 				wwrLog.Error(err, emsg.Error())
-				return false, errors.Join(err, emsg)
+				return errors.Join(err, emsg)
 			}
 			i++
 		}
@@ -289,10 +274,7 @@ func (r *WorkflowWebhookRequestReconciler) reconcileCurrentJobs(ctx context.Cont
 		})
 	}
 
-	err = r.updateWwr(ctx, wwr)
-
-	// Requeue if there is not error
-	return err == nil, err
+	return r.updateWwr(ctx, wwr)
 }
 
 func (r *WorkflowWebhookRequestReconciler) createJob(
@@ -376,9 +358,9 @@ func (r *WorkflowWebhookRequestReconciler) createJob(
 
 // If WorkflowWebhookRequest has some queued Jobs, check their status, requeue it
 // if it is necessary, and progress to the next workflows.
-func (r *WorkflowWebhookRequestReconciler) checkCurrentJobs(ctx context.Context, wwr *simplecicdv1alpha1.WorkflowWebhookRequest) (bool, error) {
+func (r *WorkflowWebhookRequestReconciler) checkCurrentJobs(ctx context.Context, wwr *simplecicdv1alpha1.WorkflowWebhookRequest) error {
 	if len(wwr.Status.CurrentJobs) == 0 {
-		return false, nil
+		return nil
 	}
 
 	// Check current Jobs Status.
@@ -389,13 +371,13 @@ func (r *WorkflowWebhookRequestReconciler) checkCurrentJobs(ctx context.Context,
 		if err := r.Get(ctx, jobNamespacedName.AsType(wwr.Namespace), job); err != nil {
 			emsg := fmt.Errorf(`can not fetch Job "%s"`, jobNamespacedName)
 			wwrLog.Error(err, emsg.Error(), "WorkflowWebhookRequest", wwr)
-			return false, errors.Join(err, emsg)
+			return errors.Join(err, emsg)
 		}
 
 		isDone, _ := jobStatus(job)
 		if !isDone {
 			wwrLogDebug.Info("Job is running, requeue reconciliation", "Job", jobNamespacedName)
-			return true, nil
+			return nil
 		}
 
 		jobs = append(jobs, job)
@@ -424,7 +406,7 @@ func (r *WorkflowWebhookRequestReconciler) checkCurrentJobs(ctx context.Context,
 		if err := r.Get(ctx, wnn.AsType(wwr.Namespace), w); err != nil {
 			emsg := fmt.Errorf("can not fetch Workflow %s", wnn)
 			wwrLog.Error(err, emsg.Error(), "WorkflowWebhookRequest", wwr)
-			return false, errors.Join(err, emsg)
+			return errors.Join(err, emsg)
 		}
 
 		for _, nw := range w.Spec.Next {
@@ -464,11 +446,10 @@ func (r *WorkflowWebhookRequestReconciler) checkCurrentJobs(ctx context.Context,
 	}
 
 	if err := r.updateWwr(ctx, wwr); err != nil {
-		return false, err
+		return err
 	}
 
-	// Requeue WorkflowWebhookRequest if there are more Workflows
-	return nNextWorkflows > 0, nil
+	return nil
 }
 
 func jobsFromWorkflow(wnn simplecicdv1alpha1.NamespacedName, jobs []*batchv1.Job, defaultNamespace string) (jobsFromWorkflow []*batchv1.Job, nFailures int) {
@@ -535,6 +516,7 @@ func jobStatus(job *batchv1.Job) (done bool, failed bool) {
 func (r *WorkflowWebhookRequestReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&simplecicdv1alpha1.WorkflowWebhookRequest{}).
+		Owns(&batchv1.Job{}).
 		Complete(r)
 }
 
