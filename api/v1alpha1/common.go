@@ -20,6 +20,8 @@ import (
 	"fmt"
 
 	"k8s.io/apimachinery/pkg/types"
+
+	"github.com/jlsalvador/simple-cicd/internal/buildinfo"
 )
 
 type NamespacedName struct {
@@ -66,7 +68,6 @@ var (
 func getBaseLabels() map[string]string {
 	return map[string]string{
 		"app.kubernetes.io/created-by": "simple-cicd-controller-manager",
-		//TODO: "app.kubernetes.io/version"
-		//TODO: "app.kubernetes.io/component"
+		"app.kubernetes.io/version":    buildinfo.GetVersion(),
 	}
 }

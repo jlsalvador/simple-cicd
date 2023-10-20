@@ -19,6 +19,7 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"os"
 	"sync"
 
@@ -35,6 +36,7 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	simplecicdv1alpha1 "github.com/jlsalvador/simple-cicd/api/v1alpha1"
+	"github.com/jlsalvador/simple-cicd/internal/buildinfo"
 	"github.com/jlsalvador/simple-cicd/internal/controller"
 	listener "github.com/jlsalvador/simple-cicd/internal/workflowWebhookListener"
 	//+kubebuilder:scaffold:imports
@@ -57,6 +59,8 @@ func main() {
 	var metricsAddr string
 	var enableLeaderElection bool
 	var probeAddr string
+	var showVersion bool
+	flag.BoolVar(&showVersion, "version", false, "Print version.")
 	flag.StringVar(&listenerAddr, "listener-bind-address", ":9000", "The address the listener endpoint binds to.")
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
@@ -68,6 +72,11 @@ func main() {
 	}
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
+
+	if showVersion {
+		fmt.Println(buildinfo.GetVersion())
+		return
+	}
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 

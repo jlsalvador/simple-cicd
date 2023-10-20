@@ -1,3 +1,14 @@
+# Semantic Versioning
+BUILD_CURRENT_VERSION := $(strip $(shell git describe --tags --match='[0-9]*.[0-9]*.[0-9]*' 2>/dev/null || printf 0.0.1))
+BUILD_VERSION_MAJOR ?= $(word 1, $(subst ., ,$(BUILD_CURRENT_VERSION)))
+BUILD_VERSION_MINOR ?= $(word 2, $(subst ., ,$(BUILD_CURRENT_VERSION)))
+BUILD_VERSION_PATCH ?= $(word 3, $(subst ., ,$(BUILD_CURRENT_VERSION)))
+
+LDFLAGS=\
+	-X github.com/jlsalvador/simple-cicd/internal/buildinfo.Major=$(BUILD_VERSION_MAJOR) \
+	-X github.com/jlsalvador/simple-cicd/internal/buildinfo.Minor=$(BUILD_VERSION_MINOR) \
+	-X github.com/jlsalvador/simple-cicd/internal/buildinfo.Patch=$(BUILD_VERSION_PATCH) \
+	-w -s
 
 # Image URL to use all building/pushing image targets
 IMG ?= controller:latest
@@ -80,7 +91,7 @@ test: manifests generate fmt vet cyclo envtest ## Run tests.
 
 .PHONY: build
 build: manifests generate fmt vet cyclo ## Build manager binary.
-	go build -trimpath -ldflags="-w -s" -o bin/manager cmd/main.go
+	go build -trimpath -ldflags="$(LDFLAGS)" -o bin/manager ./cmd
 
 .PHONY: run
 run: manifests generate fmt vet cyclo ## Run a controller from your host.
@@ -91,7 +102,7 @@ run: manifests generate fmt vet cyclo ## Run a controller from your host.
 # More info: https://docs.docker.com/develop/develop-images/build_enhancements/
 .PHONY: docker-build
 docker-build: ## Build docker image with the manager.
-	$(CONTAINER_TOOL) build -t ${IMG} .
+	$(CONTAINER_TOOL) build --build-arg="LDFLAGS=$(LDFLAGS)" -t ${IMG} .
 
 .PHONY: docker-push
 docker-push: ## Push docker image with the manager.
@@ -110,7 +121,7 @@ docker-buildx: ## Build and push docker image for the manager for cross-platform
 	sed -e '1 s/\(^FROM\)/FROM --platform=\$$\{BUILDPLATFORM\}/; t' -e ' 1,// s//FROM --platform=\$$\{BUILDPLATFORM\}/' Dockerfile > Dockerfile.cross
 	- $(CONTAINER_TOOL) buildx create --name project-v3-builder
 	$(CONTAINER_TOOL) buildx use project-v3-builder
-	- $(CONTAINER_TOOL) buildx build --push --platform=$(PLATFORMS) --tag ${IMG} -f Dockerfile.cross .
+	- $(CONTAINER_TOOL) buildx build --build-arg="LDFLAGS=$(LDFLAGS)" --push --platform=$(PLATFORMS) --tag ${IMG} -f Dockerfile.cross .
 	- $(CONTAINER_TOOL) buildx rm project-v3-builder
 	rm Dockerfile.cross
 
