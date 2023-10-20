@@ -53,18 +53,6 @@ var requeueAfter = func() time.Duration {
 	}
 }()
 
-// Label key names
-var (
-	LabelWorkflowWebhookRequestNamespace = simplecicdv1alpha1.GroupVersion.Group + "/from-workflowWebhookrequest-namespace"
-	LabelWorkflowWebhookRequestName      = simplecicdv1alpha1.GroupVersion.Group + "/from-workflowWebhookrequest-name"
-	LabelWorkflowWebhookNamespace        = simplecicdv1alpha1.GroupVersion.Group + "/from-workflowWebhook-namespace"
-	LabelWorkflowWebhookName             = simplecicdv1alpha1.GroupVersion.Group + "/from-workflowWebhook-name"
-	LabelWorkFlowNamespace               = simplecicdv1alpha1.GroupVersion.Group + "/from-workflow-namespace"
-	LabelWorkFlowName                    = simplecicdv1alpha1.GroupVersion.Group + "/from-workflow-name"
-	LabelJobNamespace                    = simplecicdv1alpha1.GroupVersion.Group + "/from-job-namespace"
-	LabelJobName                         = simplecicdv1alpha1.GroupVersion.Group + "/from-job-name"
-)
-
 const conditionMessageWaitingForCurrentJobs = "Waiting for current jobs"
 
 var wwrLog = ctrl.Log.WithName("workflowWebhookRequest controller")
@@ -317,7 +305,7 @@ func (r *WorkflowWebhookRequestReconciler) createJob(
 ) error {
 	// Create new labels
 	wwnn := wwr.Spec.WorkflowWebhook
-	labels := getLabels(
+	labels := simplecicdv1alpha1.GetJobLabels(
 		*jtbc.Namespace,
 		jtbc.Name,
 		workflow.Namespace,
@@ -486,7 +474,7 @@ func (r *WorkflowWebhookRequestReconciler) checkCurrentJobs(ctx context.Context,
 func jobsFromWorkflow(wnn simplecicdv1alpha1.NamespacedName, jobs []*batchv1.Job, defaultNamespace string) (jobsFromWorkflow []*batchv1.Job, nFailures int) {
 	jobsFromWorkflow = []*batchv1.Job{}
 	for _, job := range jobs {
-		if job.ObjectMeta.Labels[LabelWorkFlowNamespace] == common.DefaultString(wnn.Namespace, defaultNamespace) && job.ObjectMeta.Labels[LabelWorkFlowName] == wnn.Name {
+		if job.ObjectMeta.Labels[simplecicdv1alpha1.LabelWorkFlowNamespace] == common.DefaultString(wnn.Namespace, defaultNamespace) && job.ObjectMeta.Labels[simplecicdv1alpha1.LabelWorkFlowName] == wnn.Name {
 			jobsFromWorkflow = append(jobsFromWorkflow, job)
 			if _, isError := jobStatus(job); isError {
 				nFailures++
@@ -703,26 +691,4 @@ func cloneJob(job *batchv1.Job, njnn simplecicdv1alpha1.NamespacedName, newLabel
 		},
 	}
 	return nj
-}
-
-func getLabels(
-	fromJobNamespace string,
-	fromJobName string,
-	fromWorkflowNamespace string,
-	fromWorkflowName string,
-	fromWorkflowWebhookNamespace string,
-	fromWorkflowWebhookName string,
-	fromWorkflowWebhookRequestNamespace string,
-	fromWorkflowWebhookRequestName string,
-) map[string]string {
-	return map[string]string{
-		LabelWorkflowWebhookRequestNamespace: fromWorkflowWebhookRequestNamespace,
-		LabelWorkflowWebhookRequestName:      fromWorkflowWebhookRequestName,
-		LabelWorkflowWebhookNamespace:        fromWorkflowWebhookNamespace,
-		LabelWorkflowWebhookName:             fromWorkflowWebhookName,
-		LabelWorkFlowNamespace:               fromWorkflowNamespace,
-		LabelWorkFlowName:                    fromWorkflowName,
-		LabelJobNamespace:                    fromJobNamespace,
-		LabelJobName:                         fromJobName,
-	}
 }

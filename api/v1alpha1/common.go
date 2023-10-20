@@ -50,3 +50,23 @@ func (nn NamespacedName) AsType(defaultNamespace string) types.NamespacedName {
 		Name:      nn.Name,
 	}
 }
+
+// Label key names
+var (
+	LabelWorkflowWebhookRequestNamespace = GroupVersion.Group + "/from-workflowWebhookrequest-namespace"
+	LabelWorkflowWebhookRequestName      = GroupVersion.Group + "/from-workflowWebhookrequest-name"
+	LabelWorkflowWebhookNamespace        = GroupVersion.Group + "/from-workflowWebhook-namespace"
+	LabelWorkflowWebhookName             = GroupVersion.Group + "/from-workflowWebhook-name"
+	LabelWorkFlowNamespace               = GroupVersion.Group + "/from-workflow-namespace"
+	LabelWorkFlowName                    = GroupVersion.Group + "/from-workflow-name"
+	LabelJobNamespace                    = GroupVersion.Group + "/from-job-namespace"
+	LabelJobName                         = GroupVersion.Group + "/from-job-name"
+)
+
+func getBaseLabels() map[string]string {
+	return map[string]string{
+		"app.kubernetes.io/created-by": "simple-cicd-controller-manager",
+		//TODO: "app.kubernetes.io/version"
+		//TODO: "app.kubernetes.io/component"
+	}
+}

@@ -117,7 +117,7 @@ func testWw(ww *simplecicdv1alpha1.WorkflowWebhook, iterations int, nSuccessfulJ
 					Type:   batchv1.JobComplete,
 					Status: corev1.ConditionTrue,
 				}
-				if job.ObjectMeta.Labels[LabelJobName] == jobFailure.Name {
+				if job.ObjectMeta.Labels[simplecicdv1alpha1.LabelJobName] == jobFailure.Name {
 					condition = batchv1.JobCondition{
 						Type:   batchv1.JobFailed,
 						Status: corev1.ConditionTrue,

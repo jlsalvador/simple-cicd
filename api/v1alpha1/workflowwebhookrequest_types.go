@@ -17,6 +17,8 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"maps"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -144,4 +146,13 @@ type WorkflowWebhookRequestList struct {
 
 func init() {
 	SchemeBuilder.Register(&WorkflowWebhookRequest{}, &WorkflowWebhookRequestList{})
+}
+
+func GetWorkflowWebhookRequestLabels(ww *WorkflowWebhook) map[string]string {
+	labels := map[string]string{
+		LabelWorkflowWebhookNamespace: ww.Namespace,
+		LabelWorkflowWebhookName:      ww.Name,
+	}
+	maps.Copy(labels, getBaseLabels())
+	return labels
 }
