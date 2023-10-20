@@ -25,6 +25,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-logr/logr"
 	"go.uber.org/zap/zapcore"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -36,10 +37,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	"github.com/go-logr/logr"
 	simplecicdv1alpha1 "github.com/jlsalvador/simple-cicd/api/v1alpha1"
-	"github.com/jlsalvador/simple-cicd/internal/common"
-	"github.com/jlsalvador/simple-cicd/internal/rfc1123"
+	"github.com/jlsalvador/simple-cicd/pkg/common"
+	"github.com/jlsalvador/simple-cicd/pkg/rfc1123"
 )
 
 var DEBUG = false
