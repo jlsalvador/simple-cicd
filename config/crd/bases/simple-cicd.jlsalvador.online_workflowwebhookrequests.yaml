@@ -17,24 +17,24 @@ spec:
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
-    - description: True when there are not more Jobs to do
+    - description: True when there are not more Jobs to do.
       jsonPath: .status.done
       name: Done
       type: boolean
-    - description: How many times CurrentWorkflows have been done
+    - description: How many times CurrentWorkflows have been done.
       jsonPath: .status.iterations
       name: Iterations
       priority: 1
       type: string
-    - description: Total number of successful Jobs
+    - description: Total number of successful Jobs.
       jsonPath: .status.successfulJobs
       name: Successful Jobs
       type: string
-    - description: Total number of failed Jobs
+    - description: Total number of failed Jobs.
       jsonPath: .status.failedJobs
       name: Failed Jobs
       type: string
-    - description: Waiting for these Jobs to be done
+    - description: Waiting for these Jobs to be done.
       jsonPath: .status.currentJobs
       name: Current Jobs
       priority: 1
