@@ -71,7 +71,7 @@ type NextWorkflow struct {
 	//   - OnAnyFailure: The Job will be handled when any previous Job was not successful.
 	//   - Always: The Job will always be handled.
 	//
-	// +default="Always"
+	// +kubebuilder:default="Always"
 	// +optional
 	When *When `json:"when,omitempty"`
 }
@@ -108,6 +108,7 @@ type WorkflowSpec struct {
 	// the ability to create new Jobs referred to by this Workflow.
 	// Defaults to false.
 	//
+	// +kubebuilder:default=false
 	// +optional
 	Suspend *bool `json:"suspend,omitempty" protobuf:"varint,10,opt,name=suspend"`
 }

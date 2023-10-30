@@ -37,6 +37,7 @@ spec:
             description: WorkflowWebhookSpec defines the desired state of WorkflowWebhook
             properties:
               concurrencyPolicy:
+                default: Allow
                 description: "ConcurrencyPolicy specifies how concurrent executions
                   of WorkflowWebhookRequests that refer to this WorkflowWebhook should
                   be treated. \n Choose one of the following concurrency policies:

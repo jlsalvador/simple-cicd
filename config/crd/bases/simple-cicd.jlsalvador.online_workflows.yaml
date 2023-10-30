@@ -64,6 +64,7 @@ spec:
                       description: Workflow namespace
                       type: string
                     when:
+                      default: Always
                       description: "Describes the conditions for when a Job will be
                         handled. If not specified, the default behavior is \"Always\".
                         \n Possible statuses: - OnSuccess: The Job will be handled
@@ -85,6 +86,7 @@ spec:
                   type: object
                 type: array
               suspend:
+                default: false
                 description: When is true, the execution of this workflow will be
                   skipped, disabling the ability to create new Jobs referred to by
                   this Workflow. Defaults to false.

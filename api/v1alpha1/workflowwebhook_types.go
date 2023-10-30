@@ -59,7 +59,7 @@ type WorkflowWebhookSpec struct {
 	//   - "Forbid": Skips new WorkflowWebhookRequests if previous ones are still in progress.
 	//   - "Replace": Deletes old WorkflowWebhookRequests if new ones arrive before completion.
 	//
-	// +default="Allow"
+	// +kubebuilder:default="Allow"
 	// +optional
 	ConcurrencyPolicy *ConcurrencyPolicy `json:"concurrencyPolicy,omitempty" protobuf:"bytes,3,opt,name=concurrencyPolicy,casttype=ConcurrencyPolicy"`
 }
