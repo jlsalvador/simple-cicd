@@ -44,10 +44,11 @@ type WorkflowWebhookSpec struct {
 	// +required
 	Workflows []NamespacedName `json:"workflows"`
 
-	// Suspend suspends the execution of this WorkflowWebhook, disabling the ability to
-	// create new WorkflowWebhookRequests referred to by this WorkflowWebhook.
+	// When is true, any WorkflowWebhookRequest that refers to this
+	// WorkflowWebhook will be dropped.
 	// Defaults to false.
 	//
+	// +kubebuilder:default=false
 	// +optional
 	Suspend *bool `json:"suspend,omitempty" protobuf:"varint,10,opt,name=suspend"`
 
@@ -68,6 +69,7 @@ type WorkflowWebhookSpec struct {
 
 // WorkflowWebhook is the Schema for the workflowwebhooks API
 // +kubebuilder:resource:shortName=ww
+// +kubebuilder:printcolumn:name="Suspend",type="boolean",JSONPath=`.spec.suspend`,description="When is true, any refered WorkflowWebhookRequest will be dropped."
 type WorkflowWebhook struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

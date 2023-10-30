@@ -16,7 +16,12 @@ spec:
     singular: workflowwebhook
   scope: Namespaced
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - description: When is true, any refered WorkflowWebhookRequest will be dropped.
+      jsonPath: .spec.suspend
+      name: Suspend
+      type: boolean
+    name: v1alpha1
     schema:
       openAPIV3Schema:
         description: WorkflowWebhook is the Schema for the workflowwebhooks API
@@ -51,9 +56,9 @@ spec:
                 - Replace
                 type: string
               suspend:
-                description: Suspend suspends the execution of this WorkflowWebhook,
-                  disabling the ability to create new WorkflowWebhookRequests referred
-                  to by this WorkflowWebhook. Defaults to false.
+                default: false
+                description: When is true, any WorkflowWebhookRequest that refers
+                  to this WorkflowWebhook will be dropped. Defaults to false.
                 type: boolean
               workflows:
                 description: Specifies the list of Workflows to run.
@@ -73,3 +78,4 @@ spec:
         type: object
     served: true
     storage: true
+    subresources: {}
