@@ -104,7 +104,10 @@ type WorkflowSpec struct {
 	// +optional
 	Next []NextWorkflow `json:"next,omitempty"`
 
-	// Defaults to false
+	// When is true, the execution of this workflow will be skipped, disabling
+	// the ability to create new Jobs referred to by this Workflow.
+	// Defaults to false.
+	//
 	// +optional
 	Suspend *bool `json:"suspend,omitempty" protobuf:"varint,10,opt,name=suspend"`
 }
@@ -113,6 +116,7 @@ type WorkflowSpec struct {
 
 // Workflow is the Schema for the workflows API
 // +kubebuilder:resource:shortName=w
+// +kubebuilder:printcolumn:name="Suspend",type="boolean",JSONPath=`.spec.suspend`,description="When is true, the execution of this workflow will be skipped."
 type Workflow struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

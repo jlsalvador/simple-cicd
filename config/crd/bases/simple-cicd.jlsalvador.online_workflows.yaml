@@ -16,7 +16,12 @@ spec:
     singular: workflow
   scope: Namespaced
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - description: When is true, the execution of this workflow will be skipped.
+      jsonPath: .spec.suspend
+      name: Suspend
+      type: boolean
+    name: v1alpha1
     schema:
       openAPIV3Schema:
         description: Workflow is the Schema for the workflows API
@@ -80,7 +85,9 @@ spec:
                   type: object
                 type: array
               suspend:
-                description: Defaults to false
+                description: When is true, the execution of this workflow will be
+                  skipped, disabling the ability to create new Jobs referred to by
+                  this Workflow. Defaults to false.
                 type: boolean
             required:
             - jobsToBeCloned
@@ -88,3 +95,4 @@ spec:
         type: object
     served: true
     storage: true
+    subresources: {}
