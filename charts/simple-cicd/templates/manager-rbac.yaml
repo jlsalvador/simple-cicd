@@ -1,9 +1,9 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: {{ include "charts.fullname" . }}-manager-role
+  name: {{ include "simple-cicd.fullname" . }}-manager-role
   labels:
-  {{- include "charts.labels" . | nindent 4 }}
+  {{- include "simple-cicd.labels" . | nindent 4 }}
 rules:
 - apiGroups:
   - batch
@@ -77,17 +77,17 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: {{ include "charts.fullname" . }}-manager-rolebinding
+  name: {{ include "simple-cicd.fullname" . }}-manager-rolebinding
   labels:
     app.kubernetes.io/component: rbac
     app.kubernetes.io/created-by: simple-cicd
     app.kubernetes.io/part-of: simple-cicd
-  {{- include "charts.labels" . | nindent 4 }}
+  {{- include "simple-cicd.labels" . | nindent 4 }}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: '{{ include "charts.fullname" . }}-manager-role'
+  name: '{{ include "simple-cicd.fullname" . }}-manager-role'
 subjects:
 - kind: ServiceAccount
-  name: '{{ include "charts.fullname" . }}-controller-manager'
+  name: '{{ include "simple-cicd.fullname" . }}-controller-manager'
   namespace: '{{ .Release.Namespace }}'

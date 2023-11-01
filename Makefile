@@ -220,4 +220,4 @@ $(MISSPELL): $(LOCALBIN)
 
 .PHONY: helm
 helm: manifests kustomize helmify
-	$(KUSTOMIZE) build config/default | $(HELMIFY) -crd-dir charts
+	$(KUSTOMIZE) build config/default | $(HELMIFY) -crd-dir charts/simple-cicd
