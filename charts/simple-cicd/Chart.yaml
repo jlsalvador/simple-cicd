@@ -1,5 +1,5 @@
 apiVersion: v2
-appVersion: "0.0.6"
+appVersion: "0.0.7"
 description: Simple CI/CD operator for Kubernetes. Create workflows that can be trigged by webhooks.
 home: https://github.com/jlsalvador/simple-cicd
 icon: https://raw.githubusercontent.com/jlsalvador/simple-cicd/main/img/logo.png
@@ -28,4 +28,4 @@ name: simple-cicd
 sources:
   - "https://github.com/jlsalvador/simple-cicd"
 type: application
-version: 0.0.1
+version: 0.0.2
