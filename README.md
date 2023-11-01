@@ -30,11 +30,8 @@ kubectl apply -k config/default
 
 ### Installation by Helm
 
-Available soon.
-
 ```sh
-helm repo add simple-cicd https://jlsalvador.github.io/simple-cicd
-helm install simple-cicd simple-cicd/simple-cicd
+helm upgrade --install --create-namespace --namespace simple-cicd --repo https://jlsalvador.github.io/simple-cicd simple-cicd simple-cicd
 ```
 
 
