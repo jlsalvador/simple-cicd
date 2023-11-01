@@ -16,7 +16,7 @@ spec:
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
-    - description: When is true, any refered WorkflowWebhookRequest will be dropped.
+    - description: When is true, any referred WorkflowWebhookRequest will be dropped.
       jsonPath: .spec.suspend
       name: Suspend
       type: boolean
