@@ -1,12 +1,12 @@
-name: Release Charts
+name: Reindex Helm Charts
 
 on:
   push:
-    branches:
-      - main
+    tags:
+      - v*
 
 jobs:
-  release:
+  reindex-charts:
     permissions:
       contents: write
     runs-on: ubuntu-latest
