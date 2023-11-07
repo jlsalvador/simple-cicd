@@ -37,7 +37,7 @@ const contentTypeJson = "application/json"
 var _ = Describe("WorkflowWebhookRequest controller", func() {
 	type tdt struct {
 		ww              *simplecicdv1alpha1.WorkflowWebhook
-		iterations      int
+		steps           int
 		nSuccessfulJobs int
 		nFailedJobs     int
 	}
@@ -49,19 +49,19 @@ var _ = Describe("WorkflowWebhookRequest controller", func() {
 	} {
 		// Doc: https://github.com/golang/go/wiki/LoopvarExperiment
 		wwLoopvar := tt.ww
-		iterationsLoopvar := tt.iterations
+		stepsLoopvar := tt.steps
 		nSuccessfulJobsLoopvar := tt.nSuccessfulJobs
 		nFailedJobsLoopvar := tt.nFailedJobs
 
 		Context("WorkflowWebhookRequest "+wwLoopvar.ObjectMeta.Name, func() {
 			It("Should finish correctly", func(ctx SpecContext) {
-				testWw(wwLoopvar, iterationsLoopvar, nSuccessfulJobsLoopvar, nFailedJobsLoopvar)
+				testWw(wwLoopvar, stepsLoopvar, nSuccessfulJobsLoopvar, nFailedJobsLoopvar)
 			}, NodeTimeout(nodeTimeout))
 		})
 	}
 })
 
-func testWw(ww *simplecicdv1alpha1.WorkflowWebhook, iterations int, nSuccessfulJobs int, nFailedJobs int) {
+func testWw(ww *simplecicdv1alpha1.WorkflowWebhook, steps int, nSuccessfulJobs int, nFailedJobs int) {
 	var pr *simplecicdv1alpha1.NamespacedName
 	By(fmt.Sprintf("By trigger the creation of %s/%s through listener and reading payload", ww.Namespace, ww.Name), func() {
 		url := fmt.Sprintf(
@@ -134,8 +134,8 @@ func testWw(ww *simplecicdv1alpha1.WorkflowWebhook, iterations int, nSuccessfulJ
 		}, nodeTimeout, interval).Should(BeTrue())
 	})
 
-	By("Checking total iterations")
-	Expect(wwr.Status.Iterations).Should(Equal(iterations))
+	By("Checking total steps")
+	Expect(wwr.Status.Steps).Should(Equal(steps))
 
 	By("Checking total successful jobs")
 	Expect(wwr.Status.SuccessfulJobs).Should(Equal(nSuccessfulJobs))

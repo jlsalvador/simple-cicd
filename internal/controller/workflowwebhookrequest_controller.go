@@ -312,7 +312,7 @@ func (r *WorkflowWebhookRequestReconciler) createJob(
 	fullUnsafeName := fmt.Sprintf(
 		"%s-%d-%d-%s",
 		wwr.Name,
-		wwr.Status.Iterations,
+		wwr.Status.Steps,
 		jobIndex,
 		job.Name,
 	)
@@ -384,20 +384,20 @@ func (r *WorkflowWebhookRequestReconciler) checkCurrentJobs(ctx context.Context,
 	}
 
 	// Update successful and failures Jobs counters
-	nSuccessfulCurrentIteration := 0
-	nFailuresCurrentIteration := 0
+	nSuccessfulCurrentStep := 0
+	nFailuresCurrentStep := 0
 	for _, job := range jobs {
 		_, isError := jobStatus(job)
 		if isError {
 			wwr.Status.FailedJobs++
-			nFailuresCurrentIteration++
+			nFailuresCurrentStep++
 		} else {
 			wwr.Status.SuccessfulJobs++
-			nSuccessfulCurrentIteration++
+			nSuccessfulCurrentStep++
 		}
 	}
 
-	// Calculate CurrentWorkflow for the next iteration
+	// Calculate CurrentWorkflow for the next step
 	nextWorkflows := []simplecicdv1alpha1.NamespacedName{}
 	for _, wnn := range wwr.Status.CurrentWorkflows {
 		jFromW, nFailures := jobsFromWorkflow(wnn, jobs, wwr.Namespace)
@@ -417,17 +417,17 @@ func (r *WorkflowWebhookRequestReconciler) checkCurrentJobs(ctx context.Context,
 	}
 	nNextWorkflows := len(nextWorkflows)
 
-	// CurrentJobs are completed, clean up for the next iteration
+	// CurrentJobs are completed, clean up for the next step
 	wwr.Status.CurrentJobs = []simplecicdv1alpha1.NamespacedName{}
 	wwr.Status.CurrentWorkflows = nextWorkflows
-	wwr.Status.Iterations++
+	wwr.Status.Steps++
 
-	// Status for the current iteration
+	// Status for the current step
 	wwr.Status.Conditions = append(wwr.Status.Conditions, simplecicdv1alpha1.Condition{
 		Type:               string(simplecicdv1alpha1.WorkflowWebhookRequestProgressing),
 		Status:             simplecicdv1alpha1.ConditionUnknown,
 		Reason:             "Reconciling",
-		Message:            fmt.Sprintf("On interation %d, there were %d successful Job(s) and %d failures, with %d Workflow(s) queued.", wwr.Status.Iterations, nSuccessfulCurrentIteration, nFailuresCurrentIteration, nNextWorkflows),
+		Message:            fmt.Sprintf("On interation %d, there were %d successful Job(s) and %d failures, with %d Workflow(s) queued.", wwr.Status.Steps, nSuccessfulCurrentStep, nFailuresCurrentStep, nNextWorkflows),
 		LastTransitionTime: metav1.Now(),
 	})
 
@@ -438,7 +438,7 @@ func (r *WorkflowWebhookRequestReconciler) checkCurrentJobs(ctx context.Context,
 			Type:               string(simplecicdv1alpha1.WorkflowWebhookRequestDone),
 			Status:             simplecicdv1alpha1.ConditionTrue,
 			Reason:             "Reconciling",
-			Message:            fmt.Sprintf("All Jobs are completed. There were %d successful Job(s) and %d failures over %d iteration(s).", wwr.Status.SuccessfulJobs, wwr.Status.FailedJobs, wwr.Status.Iterations),
+			Message:            fmt.Sprintf("All Jobs are completed. There were %d successful Job(s) and %d failures over %d step(s).", wwr.Status.SuccessfulJobs, wwr.Status.FailedJobs, wwr.Status.Steps),
 			LastTransitionTime: metav1.Now(),
 		})
 

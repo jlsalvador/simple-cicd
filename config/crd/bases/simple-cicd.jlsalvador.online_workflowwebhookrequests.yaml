@@ -22,8 +22,8 @@ spec:
       name: Done
       type: boolean
     - description: How many times CurrentWorkflows have been done.
-      jsonPath: .status.iterations
-      name: Iterations
+      jsonPath: .status.steps
+      name: Steps
       priority: 1
       type: string
     - description: Total number of successful Jobs.
@@ -164,14 +164,14 @@ spec:
               failedJobs:
                 description: Number of failed Jobs owned by this WorkflowWebhookRequest.
                 type: integer
-              iterations:
+              steps:
                 description: Count of how many times CurrentWorkflows have been done.
                 type: integer
               successfulJobs:
                 description: Number of successful Jobs owned by this WorkflowWebhookRequest.
                 type: integer
             required:
-            - iterations
+            - steps
             type: object
         type: object
     served: true
