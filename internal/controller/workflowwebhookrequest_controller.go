@@ -629,6 +629,9 @@ func cloneJob(job *batchv1.Job, njnn simplecicdv1alpha1.NamespacedName, newLabel
 			Suspend:                 &njSuspend,
 			TTLSecondsAfterFinished: job.Spec.TTLSecondsAfterFinished,
 			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: newLabels,
+				},
 				Spec: corev1.PodSpec{
 					ActiveDeadlineSeconds:         job.Spec.Template.Spec.ActiveDeadlineSeconds,
 					Affinity:                      job.Spec.Template.Spec.Affinity,
