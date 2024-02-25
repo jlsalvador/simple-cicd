@@ -19,7 +19,10 @@ spec:
   #   "password": "pass"
   # }
   body: ewogICJ1c2VybmFtZSI6ICJ1c2VyIiwKICAicGFzc3dvcmQiOiAicGFzcyIKfQo=
+
 ---
+# This WorkflowWebhookRequest will be deleted 30 seconds after it is finished.
+# The "30 seconds" value comes from the "sample-ttl" WorkflowWebhook.ttlSecondsAfterFinished.
 apiVersion: simple-cicd.jlsalvador.online/v1alpha1
 kind: WorkflowWebhookRequest
 metadata:

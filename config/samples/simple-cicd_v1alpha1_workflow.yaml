@@ -1,3 +1,4 @@
+# Echo "hello" and launch the "random" Workflow afterward.
 apiVersion: simple-cicd.jlsalvador.online/v1alpha1
 kind: Workflow
 metadata:
@@ -8,7 +9,9 @@ spec:
   next:
     - name: random
       # when: # when is optional, by default is "Always"
+
 ---
+# Echo "hi" and perform no additional actions.
 apiVersion: simple-cicd.jlsalvador.online/v1alpha1
 kind: Workflow
 metadata:
@@ -16,7 +19,17 @@ metadata:
 spec:
   jobsToBeCloned:
     - name: echo-hi
+
 ---
+# This "random" Workflow will launch two pods, which will exit randomly as
+# successful or not.
+# Depending on the three possible states: (all success, all failures, some
+# success and some failures), it will launch the Workflow "all-ok", "all-bad",
+# or "some-successes" and "some-failures".
+#
+# The idea with this Workflow is to present to you the possibility to launch
+# different Workflows depending on the success (or failure) of the last ones.
+# A.K.A. conditional Workflows.
 apiVersion: simple-cicd.jlsalvador.online/v1alpha1
 kind: Workflow
 metadata:
@@ -34,7 +47,9 @@ spec:
       when: OnAnySuccess
     - name: some-failures
       when: OnAnyFailure
+
 ---
+# Echo "all was ok" and proceed to the "bye" Workflow unconditionally.
 apiVersion: simple-cicd.jlsalvador.online/v1alpha1
 kind: Workflow
 metadata:
@@ -45,7 +60,9 @@ spec:
   next:
     - name: bye
       when: Always
+
 ---
+# Echo "all was bad" and proceed to the "bye" Workflow unconditionally.
 apiVersion: simple-cicd.jlsalvador.online/v1alpha1
 kind: Workflow
 metadata:
@@ -56,7 +73,9 @@ spec:
   next:
     - name: bye
       when: Always
+
 ---
+# Echo "some successes" and proceed to the "bye" Workflow unconditionally.
 apiVersion: simple-cicd.jlsalvador.online/v1alpha1
 kind: Workflow
 metadata:
@@ -67,7 +86,9 @@ spec:
   next:
     - name: bye
       when: Always
+
 ---
+# Echo "some failures" and proceed to the "bye" Workflow unconditionally.
 apiVersion: simple-cicd.jlsalvador.online/v1alpha1
 kind: Workflow
 metadata:
@@ -78,7 +99,9 @@ spec:
   next:
     - name: bye
       when: Always
+
 ---
+# Echo "bye" and perform no additional actions.
 apiVersion: simple-cicd.jlsalvador.online/v1alpha1
 kind: Workflow
 metadata:
@@ -86,20 +109,15 @@ metadata:
 spec:
   jobsToBeCloned:
     - name: echo-bye
+
 ---
+# Since this Workflow has suspend=true, it will not execute when triggered
+# by a WorkflowWebhook or another Workflow.
 apiVersion: simple-cicd.jlsalvador.online/v1alpha1
 kind: Workflow
 metadata:
-  name: suspended # This Workflow will not be triggered
+  name: suspended
 spec:
   suspend: true
   jobsToBeCloned:
     - name: echo-hi
----
-apiVersion: simple-cicd.jlsalvador.online/v1alpha1
-kind: Workflow
-metadata:
-  name: sleep-timeout # This Workflow will sleep infinity but will be killed by a timeout.
-spec:
-  jobsToBeCloned:
-    - name: sleep-timeout

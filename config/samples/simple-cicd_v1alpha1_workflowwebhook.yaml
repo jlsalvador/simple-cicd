@@ -7,12 +7,15 @@ spec:
   - name: hello
   - name: hi
   - name: suspended
+
 ---
+# Because ttlSecondsAfterFinished is 30, any WorkflowWebhookRequest that launch
+# this WorkflowWebhook will be deleted 30 seconds after it is finished.
 apiVersion: simple-cicd.jlsalvador.online/v1alpha1
 kind: WorkflowWebhook
 metadata:
   name: sample-ttl
 spec:
   workflows:
-  - name: sleep-timeout
+  - name: hi
   ttlSecondsAfterFinished: 30
