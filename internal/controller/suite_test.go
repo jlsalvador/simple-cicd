@@ -69,14 +69,16 @@ const (
 
 // Pointer-referred variables for the test assets
 var (
-	suspend      = true
-	replace      = simplecicdv1alpha1.Replace
-	forbid       = simplecicdv1alpha1.Forbid
-	backoffLimit = int32(0)
-	onSuccess    = simplecicdv1alpha1.OnSuccess
-	onFailure    = simplecicdv1alpha1.OnFailure
-	onAnySuccess = simplecicdv1alpha1.OnAnySuccess
-	onAnyFailure = simplecicdv1alpha1.OnAnyFailure
+	suspend           = true
+	replace           = simplecicdv1alpha1.Replace
+	forbid            = simplecicdv1alpha1.Forbid
+	backoffLimit      = int32(0)
+	onSuccess         = simplecicdv1alpha1.OnSuccess
+	onFailure         = simplecicdv1alpha1.OnFailure
+	onAnySuccess      = simplecicdv1alpha1.OnAnySuccess
+	onAnyFailure      = simplecicdv1alpha1.OnAnyFailure
+	ttlSecondsNear    = int64(1)
+	ttlSecondsDistant = int64(1 * 60 * 60)
 )
 
 // Jobs
@@ -371,6 +373,38 @@ var (
 			},
 		},
 	}
+	workflowWebhookTtlNear = &simplecicdv1alpha1.WorkflowWebhook{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: simplecicdv1alpha1.GroupVersion.Identifier(),
+			Kind:       "WorkflowWebhook",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      namePrefix + "ttl-near",
+			Namespace: namespace,
+		},
+		Spec: simplecicdv1alpha1.WorkflowWebhookSpec{
+			TtlSecondsAfterFinished: &ttlSecondsNear,
+			Workflows: []simplecicdv1alpha1.NamespacedName{
+				{Name: workflowCatRequest.ObjectMeta.Name},
+			},
+		},
+	}
+	workflowWebhookTtlDistant = &simplecicdv1alpha1.WorkflowWebhook{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: simplecicdv1alpha1.GroupVersion.Identifier(),
+			Kind:       "WorkflowWebhook",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      namePrefix + "ttl-distant",
+			Namespace: namespace,
+		},
+		Spec: simplecicdv1alpha1.WorkflowWebhookSpec{
+			TtlSecondsAfterFinished: &ttlSecondsDistant,
+			Workflows: []simplecicdv1alpha1.NamespacedName{
+				{Name: workflowCatRequest.ObjectMeta.Name},
+			},
+		},
+	}
 )
 
 func TestControllers(t *testing.T) {
@@ -484,6 +518,8 @@ var _ = BeforeSuite(func() {
 		workflowWebhookSuspended,
 		workflowWebhookReplace,
 		workflowWebhookForbid,
+		workflowWebhookTtlNear,
+		workflowWebhookTtlDistant,
 	} {
 		Expect(k8sClient.Create(ctx, ww)).Should(Succeed())
 		Eventually(func() error {

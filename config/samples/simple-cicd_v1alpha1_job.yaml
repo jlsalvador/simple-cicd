@@ -4,7 +4,6 @@ metadata:
   name: echo-hello
 spec:
   suspend: true # The field suspend is required to be true to disallow Kubernetes to start this job when it will be created
-  ttlSecondsAfterFinished: 300
   template:
     spec:
       containers:
@@ -19,7 +18,6 @@ metadata:
   name: echo-hi
 spec:
   suspend: true # The field suspend is required to be true to disallow Kubernetes to start this job when it will be created
-  ttlSecondsAfterFinished: 300
   template:
     spec:
       containers:
@@ -34,7 +32,6 @@ metadata:
   name: exit-random
 spec:
   suspend: true # The field suspend is required to be true to disallow Kubernetes to start this job when it will be created
-  ttlSecondsAfterFinished: 300
   backoffLimit: 0 # This Job could fails, so do not try again to run it
   template:
     spec:
@@ -50,7 +47,6 @@ metadata:
   name: echo-all-ok
 spec:
   suspend: true # The field suspend is required to be true to disallow Kubernetes to start this job when it will be created
-  ttlSecondsAfterFinished: 300
   template:
     spec:
       containers:
@@ -65,7 +61,6 @@ metadata:
   name: echo-all-bad
 spec:
   suspend: true # The field suspend is required to be true to disallow Kubernetes to start this job when it will be created
-  ttlSecondsAfterFinished: 300
   template:
     spec:
       containers:
@@ -80,7 +75,6 @@ metadata:
   name: echo-some-successes
 spec:
   suspend: true # The field suspend is required to be true to disallow Kubernetes to start this job when it will be created
-  ttlSecondsAfterFinished: 300
   template:
     spec:
       containers:
@@ -95,7 +89,6 @@ metadata:
   name: echo-some-failures
 spec:
   suspend: true # The field suspend is required to be true to disallow Kubernetes to start this job when it will be created
-  ttlSecondsAfterFinished: 300
   template:
     spec:
       containers:
@@ -110,11 +103,26 @@ metadata:
   name: echo-bye
 spec:
   suspend: true # The field suspend is required to be true to disallow Kubernetes to start this job when it will be created
-  ttlSecondsAfterFinished: 300
   template:
     spec:
       containers:
       - name: bye
         image: bash
         command: ["echo",  "bye"]
+      restartPolicy: Never
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: sleep-timeout
+spec:
+  suspend: true # The field suspend is required to be true to disallow Kubernetes to start this job when it will be created
+  activeDeadlineSeconds: 60
+  backoffLimit: 0
+  template:
+    spec:
+      containers:
+      - name: bye
+        image: bash
+        command: ["sleep",  "infinity"]
       restartPolicy: Never

@@ -23,6 +23,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/go-logr/logr"
 	"go.uber.org/zap/zapcore"
@@ -84,7 +85,7 @@ type WorkflowWebhookRequestReconciler struct {
 func (r *WorkflowWebhookRequestReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	wwrLog.WithValues("run", req.NamespacedName)
 
-	wwr, err := r.ensureWorkflowWebhookRequest(ctx, req.NamespacedName)
+	wwr, err := r.fetchWorkflowWebhookRequest(ctx, req.NamespacedName)
 	if err != nil {
 		return ctrl.Result{}, err
 	} else if wwr == nil {
@@ -92,8 +93,11 @@ func (r *WorkflowWebhookRequestReconciler) Reconcile(ctx context.Context, req ct
 		return ctrl.Result{}, nil
 	}
 
+	if err := r.reconcileTtlSecondsAfterFinishedExpired(ctx, wwr); err != nil {
+		return ctrl.Result{}, err
+	}
+
 	if wwr.Status.Done {
-		// This WorkflowWebhookRequest is Done, do nothing.
 		return ctrl.Result{}, nil
 	}
 
@@ -118,22 +122,34 @@ func (r *WorkflowWebhookRequestReconciler) Reconcile(ctx context.Context, req ct
 		return ctrl.Result{}, err
 	}
 
+	if after, err := r.reconcileTtlSecondsAfterFinished(ctx, wwr); err != nil {
+		return ctrl.Result{}, err
+	} else if after > 0 {
+		return ctrl.Result{RequeueAfter: after}, nil
+	}
+
 	return ctrl.Result{}, nil
 }
 
-// Fetch the WorkflowWebhookRequest instance
+// Fetch the WorkflowWebhookRequest instance.
 //
-// The purpose is check if the Custom Resource for the Kind WorkflowWebhookRequest
-// is applied on the cluster if not we return nil to stop the reconciliation
-func (r *WorkflowWebhookRequestReconciler) ensureWorkflowWebhookRequest(ctx context.Context, wwrnn types.NamespacedName) (*simplecicdv1alpha1.WorkflowWebhookRequest, error) {
+// The purpose is check if the Custom Resource for the Kind
+// WorkflowWebhookRequest is applied on the cluster if not we return nil to
+// stop the reconciliation.
+func (r *WorkflowWebhookRequestReconciler) fetchWorkflowWebhookRequest(
+	ctx context.Context,
+	wwrnn types.NamespacedName,
+) (*simplecicdv1alpha1.WorkflowWebhookRequest, error) {
 	wwr := &simplecicdv1alpha1.WorkflowWebhookRequest{}
 	if err := r.Get(ctx, wwrnn, wwr); err != nil {
 		if apierrors.IsNotFound(err) {
-			// If the custom resource is not found then, it usually means that it was deleted or not created
-			// In this way, we will stop the reconciliation
+			// If the custom resource is not found then, it usually means that
+			// it was deleted or not created. In this way, we will stop the
+			// reconciliation.
 			wwrLogDebug.Info("resource not found. Ignoring since object must be deleted", "WorkflowWebhookRequest", wwrnn)
 			return nil, nil
 		}
+
 		// Error reading the object - requeue the request.
 		emsg := fmt.Sprintf("Failed to get workflowWebhookRequest %q", wwrnn)
 		wwrLog.Error(err, emsg)
@@ -141,6 +157,108 @@ func (r *WorkflowWebhookRequestReconciler) ensureWorkflowWebhookRequest(ctx cont
 	}
 	wwrLogDebug.Info("WorkflowWebhookRequest fetched", "WorkflowWebhookRequest", wwrnn)
 	return wwr, nil
+}
+
+// If the field WorkflowWebhookRequest.Spec.TtlSecondsAfterFinished is set,
+// after the WorkFlowWebhookRequest finishes, it is eligible to be
+// automatically deleted.
+func (r *WorkflowWebhookRequestReconciler) reconcileTtlSecondsAfterFinishedExpired(
+	ctx context.Context,
+	wwr *simplecicdv1alpha1.WorkflowWebhookRequest,
+) error {
+	if !wwr.Status.Done {
+		// The WorkflowWebhookRequest is not Done yet, ignore its
+		// TtlSecondsAfterFinishedExpired.
+		return nil
+	}
+
+	ww, err := r.fetchWorkflowWebhookFromWorkflowWebhookRequest(ctx, wwr)
+	if err != nil {
+		return err
+	}
+	if ww == nil {
+		// WorkflowWebhook deleted, do nothing.
+		return nil
+	}
+	if ww.Spec.TtlSecondsAfterFinished == nil {
+		return nil
+	}
+	ttlSeconds := *ww.Spec.TtlSecondsAfterFinished
+
+	conditionDone := simplecicdv1alpha1.GetLatestConditionByType(
+		wwr.Status.Conditions,
+		simplecicdv1alpha1.WorkflowWebhookRequestDone,
+	)
+	if conditionDone == nil {
+		err := fmt.Errorf(
+			`can not find latest Condition.Type == "Done" from WorkflowWebhookRequest.Status.Conditions, "%s/%s"`,
+			wwr.Namespace,
+			wwr.Name,
+		)
+		return err
+	}
+
+	expires := conditionDone.LastTransitionTime.Add(time.Duration(ttlSeconds) * time.Second)
+	now := time.Now()
+	if now.After(expires) {
+		// Delete WorkflowWebhookRequest because it is expired.
+		if err := r.Delete(ctx, wwr); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// If the WorkflowWebhookRequest is Done and the field
+// WorkflowWebhookRequest.Spec.TtlSecondsAfterFinished is set,
+// requeue it at (Condition.Type==Done).LastTransitionTime + TtlSecondsAfterFinished.
+// If it is already expired, delete the WorkflowWebhookRequest.
+func (r *WorkflowWebhookRequestReconciler) reconcileTtlSecondsAfterFinished(
+	ctx context.Context,
+	wwr *simplecicdv1alpha1.WorkflowWebhookRequest,
+) (time.Duration, error) {
+	if !wwr.Status.Done {
+		// The WorkflowWebhookRequest is not Done yet, ignore its
+		// TtlSecondsAfterFinishedExpired.
+		return 0, nil
+	}
+
+	ww, err := r.fetchWorkflowWebhookFromWorkflowWebhookRequest(ctx, wwr)
+	if err != nil {
+		return 0, err
+	}
+	if ww == nil || ww.Spec.TtlSecondsAfterFinished == nil {
+		return 0, nil
+	}
+	ttlSeconds := *ww.Spec.TtlSecondsAfterFinished
+
+	conditionDone := simplecicdv1alpha1.GetLatestConditionByType(wwr.Status.Conditions, simplecicdv1alpha1.WorkflowWebhookRequestDone)
+	if conditionDone == nil {
+		err := fmt.Errorf(
+			`can not find latest Condition.Type == "Done" from WorkflowWebhookRequest.Status.Conditions, "%s/%s"`,
+			wwr.Namespace,
+			wwr.Name,
+		)
+		return 0, err
+	}
+
+	expires := conditionDone.LastTransitionTime.Add(time.Duration(ttlSeconds) * time.Second)
+	now := time.Now()
+	duration := expires.Sub(now)
+	if duration > 0 {
+		// Requeue the WorkflowWebhookRequest to the future, when it will expires.
+		// Add a second more to prevents possible drifts.
+		return duration + (1 * time.Second), nil
+	}
+
+	// Delete WorkflowWebhookRequest because it is expired.
+	if err := r.Delete(ctx, wwr); err != nil {
+		err := fmt.Errorf(`error while removing the WorkflowWebhookRequest "%s/%s"`, wwr.Namespace, wwr.Name)
+		return 0, err
+	}
+
+	return 0, nil
 }
 
 // If there are not any WorkflowWebhookRequest.Status.Conditions just set a first
@@ -198,13 +316,8 @@ func (r *WorkflowWebhookRequestReconciler) ensureSecret(ctx context.Context, wwr
 	return secret, nil
 }
 
-// Let's just fill the Status.CurrentWorkflows when it is not available
-func (r *WorkflowWebhookRequestReconciler) reconcileCurrentWorkFlows(ctx context.Context, wwr *simplecicdv1alpha1.WorkflowWebhookRequest) error {
-	if wwr.Status.CurrentWorkflows != nil {
-		return nil
-	}
-
-	// Fetch the ref. WorkflowWebhook
+// Fetch the referenced WorkflowWebhook from a WorkflowWebhookRequest.
+func (r *WorkflowWebhookRequestReconciler) fetchWorkflowWebhookFromWorkflowWebhookRequest(ctx context.Context, wwr *simplecicdv1alpha1.WorkflowWebhookRequest) (*simplecicdv1alpha1.WorkflowWebhook, error) {
 	wwnn := wwr.Spec.WorkflowWebhook.AsType(wwr.Namespace)
 	ww := &simplecicdv1alpha1.WorkflowWebhook{}
 	if err := r.Get(ctx, wwnn, ww); err != nil {
@@ -212,14 +325,27 @@ func (r *WorkflowWebhookRequestReconciler) reconcileCurrentWorkFlows(ctx context
 			// If the custom resource is not found then, it usually means that it
 			// was deleted or not created. In this way, we will stop the reconciliation
 			wwrLog.Info("resource not found. Ignoring since object must be deleted", "WorkflowWebhook", wwnn)
-			return nil
+			return nil, nil
 		}
 		// Error reading the object - requeue the request.
 		emsg := fmt.Errorf("failed to get workflowWebhook %s", wwr.Spec.WorkflowWebhook)
 		wwrLog.Error(err, emsg.Error(), "WorkflowWebhookRequest", wwr)
-		return errors.Join(err, emsg)
+		return nil, errors.Join(err, emsg)
 	}
 	wwrLogDebug.Info("WorkflowWebhook fetched", "WorkflowWebhook", wwnn)
+	return ww, nil
+}
+
+// Let's just fill the Status.CurrentWorkflows when it is not available
+func (r *WorkflowWebhookRequestReconciler) reconcileCurrentWorkFlows(ctx context.Context, wwr *simplecicdv1alpha1.WorkflowWebhookRequest) error {
+	if wwr.Status.CurrentWorkflows != nil {
+		return nil
+	}
+
+	ww, err := r.fetchWorkflowWebhookFromWorkflowWebhookRequest(ctx, wwr)
+	if err != nil {
+		return err
+	}
 
 	wwr.Status.CurrentWorkflows = ww.Spec.Workflows
 	return r.updateWwr(ctx, wwr)

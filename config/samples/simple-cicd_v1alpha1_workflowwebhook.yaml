@@ -7,3 +7,12 @@ spec:
   - name: hello
   - name: hi
   - name: suspended
+---
+apiVersion: simple-cicd.jlsalvador.online/v1alpha1
+kind: WorkflowWebhook
+metadata:
+  name: sample-ttl
+spec:
+  workflows:
+  - name: sleep-timeout
+  ttlSecondsAfterFinished: 30

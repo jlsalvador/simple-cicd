@@ -19,3 +19,11 @@ spec:
   #   "password": "pass"
   # }
   body: ewogICJ1c2VybmFtZSI6ICJ1c2VyIiwKICAicGFzc3dvcmQiOiAicGFzcyIKfQo=
+---
+apiVersion: simple-cicd.jlsalvador.online/v1alpha1
+kind: WorkflowWebhookRequest
+metadata:
+  name: sample-ttl
+spec:
+  workflowWebhook:
+    name: sample-ttl

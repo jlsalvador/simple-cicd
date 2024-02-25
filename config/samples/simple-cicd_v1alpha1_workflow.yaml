@@ -92,5 +92,14 @@ kind: Workflow
 metadata:
   name: suspended # This Workflow will not be triggered
 spec:
+  suspend: true
   jobsToBeCloned:
     - name: echo-hi
+---
+apiVersion: simple-cicd.jlsalvador.online/v1alpha1
+kind: Workflow
+metadata:
+  name: sleep-timeout # This Workflow will sleep infinity but will be killed by a timeout.
+spec:
+  jobsToBeCloned:
+    - name: sleep-timeout

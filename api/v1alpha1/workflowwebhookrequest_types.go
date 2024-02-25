@@ -79,6 +79,21 @@ type Condition struct {
 	LastTransitionTime metav1.Time     `json:"lastTransitionTime"`
 }
 
+// Search the last Condition by its Type from a Condition slice.
+func GetLatestConditionByType(conditions []Condition, conditionType ConditionType) *Condition {
+	if len(conditions) == 0 {
+		return nil
+	}
+
+	for i := len(conditions) - 1; i >= 0; i-- {
+		condition := conditions[i]
+		if condition.Type == string(conditionType) {
+			return &condition
+		}
+	}
+	return nil
+}
+
 // WorkflowWebhookRequestStatus defines the observed state of a WorkflowWebhookRequest.
 type WorkflowWebhookRequestStatus struct {
 	// List of Jobs currently running associated with the current WorkflowWebhookRequest.

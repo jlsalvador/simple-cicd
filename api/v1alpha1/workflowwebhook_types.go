@@ -63,6 +63,15 @@ type WorkflowWebhookSpec struct {
 	// +kubebuilder:default="Allow"
 	// +optional
 	ConcurrencyPolicy *ConcurrencyPolicy `json:"concurrencyPolicy,omitempty" protobuf:"bytes,3,opt,name=concurrencyPolicy,casttype=ConcurrencyPolicy"`
+
+	// If the field ttlSecondsAfterFinished is set, after the WorkFlowWebhookRequest
+	// finishes, it is eligible to be automatically deleted.
+	// If this field is unset, the WorkFlowWebhookRequest won't be automatically deleted.
+	// If this field is set to zero, the WorkFlowWebhookRequest becomes eligible to be
+	// deleted immediately after it finishes.
+	//
+	// +optional
+	TtlSecondsAfterFinished *int64 `json:"ttlSecondsAfterFinished,omitempty"`
 }
 
 //+kubebuilder:object:root=true

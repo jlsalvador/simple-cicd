@@ -46,6 +46,8 @@ var _ = Describe("WorkflowWebhookRequest controller", func() {
 		{workflowWebhookSuspended, 1, 0, 0},
 		{workflowWebhookForbid, 1, 1, 0},
 		{workflowWebhookReplace, 1, 1, 0},
+		{workflowWebhookTtlNear, 1, 1, 0},
+		{workflowWebhookTtlDistant, 1, 1, 0},
 	} {
 		// Doc: https://github.com/golang/go/wiki/LoopvarExperiment
 		wwLoopvar := tt.ww
@@ -143,6 +145,22 @@ func testWw(ww *simplecicdv1alpha1.WorkflowWebhook, steps int, nSuccessfulJobs i
 	By("Checking total failed jobs")
 	Expect(wwr.Status.FailedJobs).Should(Equal(nFailedJobs))
 
-	By(fmt.Sprintf("Deleting the WorkflowWebhookRequest %s", wwrnn))
-	Expect(k8sClient.Delete(ctx, wwr)).Should(Succeed())
+	expired := false
+	maxSeconds := int64(nodeTimeout.Seconds())
+	if ww.Spec.TtlSecondsAfterFinished != nil {
+		if *ww.Spec.TtlSecondsAfterFinished > maxSeconds {
+			wwrLog.Info(fmt.Sprintf("Skip checking TtlSecondsAfterFinished because WorkflowWebhookRequest %s WorkflowWebhook.Spec.TtlSecondsAfterFinished is more than nodeTimeout %q", wwrnn, maxSeconds))
+		} else {
+			By("Checking TtlSecondsAfterFinished")
+			Eventually(func() error {
+				return k8sClient.Get(ctx, wwrnn, wwr)
+			}, timeout, interval).ShouldNot(Succeed())
+			expired = true
+		}
+	}
+
+	if !expired {
+		By(fmt.Sprintf("Deleting the WorkflowWebhookRequest %s", wwrnn))
+		Expect(k8sClient.Delete(ctx, wwr)).Should(Succeed())
+	}
 }
