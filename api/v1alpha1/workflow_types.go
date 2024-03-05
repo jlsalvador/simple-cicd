@@ -118,6 +118,7 @@ type WorkflowSpec struct {
 // Workflow is the Schema for the workflows API
 // +kubebuilder:resource:shortName=w
 // +kubebuilder:printcolumn:name="Suspend",type="boolean",JSONPath=`.spec.suspend`,description="When is true, the execution of this workflow will be skipped."
+// +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 type Workflow struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
