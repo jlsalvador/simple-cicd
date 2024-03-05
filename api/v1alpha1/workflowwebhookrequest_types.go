@@ -142,6 +142,7 @@ type WorkflowWebhookRequestStatus struct {
 // +kubebuilder:printcolumn:name="Successful Jobs",type=string,JSONPath=`.status.successfulJobs`,description="Total number of successful Jobs."
 // +kubebuilder:printcolumn:name="Failed Jobs",type=string,JSONPath=`.status.failedJobs`,description="Total number of failed Jobs."
 // +kubebuilder:printcolumn:name="Current Jobs",type=string,JSONPath=`.status.currentJobs`,priority=1,description="Waiting for these Jobs to be done."
+// +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 type WorkflowWebhookRequest struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
