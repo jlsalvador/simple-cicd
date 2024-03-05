@@ -79,6 +79,7 @@ type WorkflowWebhookSpec struct {
 // WorkflowWebhook is the Schema for the workflowwebhooks API
 // +kubebuilder:resource:shortName=ww
 // +kubebuilder:printcolumn:name="Suspend",type="boolean",JSONPath=`.spec.suspend`,description="When is true, any referred WorkflowWebhookRequest will be dropped."
+// +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 type WorkflowWebhook struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
