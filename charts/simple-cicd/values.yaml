@@ -1,59 +1,70 @@
-controllerManager:
-  kubeRbacProxy:
-    args:
-    - --secure-listen-address=0.0.0.0:8443
-    - --upstream=http://127.0.0.1:8080/
-    - --logtostderr=true
-    - --v=0
-    containerSecurityContext:
-      allowPrivilegeEscalation: false
-      capabilities:
-        drop:
-        - ALL
-    image:
-      repository: gcr.io/kubebuilder/kube-rbac-proxy
-      tag: v0.14.1
-    resources:
-      limits:
-        cpu: 500m
-        memory: 128Mi
-      requests:
-        cpu: 5m
-        memory: 64Mi
-  manager:
-    args:
-    - --health-probe-bind-address=:8081
-    - --metrics-bind-address=127.0.0.1:8080
-    - --leader-elect
-    containerSecurityContext:
-      allowPrivilegeEscalation: false
-      capabilities:
-        drop:
-        - ALL
-    image:
-      repository: jlsalvador/simple-cicd
-      tag: 0.0.7
-    resources:
-      limits:
-        cpu: 500m
-        memory: 128Mi
-      requests:
-        cpu: 10m
-        memory: 64Mi
-  ports:
-  - name: http
+## Number of operator replicas.
+## Only 1 is supported to avoid duplicate reconciliations.
+replicaCount: 1
+
+image:
+  repository: ghcr.io/jlsalvador/simple-cicd
+  pullPolicy: IfNotPresent
+  # Overrides the image tag. Defaults to the chart appVersion.
+  tag: ""
+
+## Additional image pull secrets.
+imagePullSecrets: []
+
+## Override the chart name used in resource labels/names.
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  ## Name of the ServiceAccount to use.
+  ## If empty, the full chart name is used.
+  name: ""
+
+## Namespace where the operator is deployed.
+## Defaults to the Helm release namespace.
+namespaceOverride: ""
+
+service:
+  port: 9000
+  targetPort: 9000
+
+resources:
+  requests:
+    cpu: "50m"
+    memory: "64Mi"
+  limits:
+    cpu: "200m"
+    memory: "128Mi"
+
+## Pod-level security context.
+podSecurityContext:
+  runAsNonRoot: true
+
+## Container-level security context.
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 65534
+
+livenessProbe:
+  httpGet:
+    path: /healthz
     port: 9000
-    protocol: TCP
-    targetPort: http
-  replicas: 1
-  serviceAccount:
-    annotations: {}
-  type: ClusterIP
-kubernetesClusterDomain: cluster.local
-metricsService:
-  ports:
-  - name: https
-    port: 8443
-    protocol: TCP
-    targetPort: https
-  type: ClusterIP
+  initialDelaySeconds: 5
+  periodSeconds: 15
+
+## Extra labels added to all resources.
+extraLabels: {}
+
+## Extra annotations added to the Deployment pod template.
+podAnnotations: {}
+
+## Node selector for the operator pod.
+nodeSelector: {}
+
+## Tolerations for the operator pod.
+tolerations: []
+
+## Affinity rules for the operator pod.
+affinity: {}

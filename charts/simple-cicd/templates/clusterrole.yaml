@@ -1,0 +1,26 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "simple-cicd.fullname" . }}
+  labels:
+    {{- include "simple-cicd.labels" . | nindent 4 }}
+rules:
+  # Read Workflows and WorkflowWebhooks
+  - apiGroups: ["simple-cicd.jlsalvador.online"]
+    resources: ["workflows", "workflowwebhooks"]
+    verbs: ["get", "list", "watch"]
+
+  # Full control over WorkflowWebhookRequests (create, update status, delete)
+  - apiGroups: ["simple-cicd.jlsalvador.online"]
+    resources: ["workflowwebhookrequests"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+  # Create request Secrets for job pods (one per WWR namespace)
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "create", "patch"]
+
+  # Clone and inspect batch Jobs
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["get", "list", "watch", "create", "delete"]

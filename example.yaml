@@ -1,0 +1,73 @@
+# Job that randomly exits with code 0 or 1 (OK or Error)
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: job-example-random-exit
+spec:
+  suspend: true # Required to be true to disallow Kubernetes to start this job when it will be created
+  backoffLimit: 0 # If this Job fail do not try to run it again
+  template:
+    spec:
+      containers:
+        - name: random-exit
+          image: bash
+          command: ["sh", "-c", "exit $$(($RANDOM % 2))"] # Sometimes will fails
+      restartPolicy: Never # Do not re-run the pod if something fails
+---
+# Job that echoes "ERROR"
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: job-example-error
+spec:
+  suspend: true # Required to be true to disallow Kubernetes to start this job when it will be created
+  template:
+    spec:
+      containers:
+        - name: error
+          image: bash
+          command: ["echo", "ERROR"]
+        - name: echo-request
+          image: bash
+          command:
+            - cat # Simple CI/CD will mounts the next request payloads inside all Pods
+            - /var/run/secrets/kubernetes.io/request/body
+            - /var/run/secrets/kubernetes.io/request/headers
+            - /var/run/secrets/kubernetes.io/request/host
+            - /var/run/secrets/kubernetes.io/request/method
+            - /var/run/secrets/kubernetes.io/request/url
+            - /var/run/secrets/kubernetes.io/request/remoteAddr
+            - /var/run/secrets/kubernetes.io/request/timestamp
+            - /var/run/secrets/kubernetes.io/request/userAgent
+      restartPolicy: Never # Do not re-run the pod if something fails
+---
+# Workflow that will clones the "job-example-error" Job
+apiVersion: simple-cicd.jlsalvador.online/v1alpha1
+kind: Workflow
+metadata:
+  name: workflow-example-some-failures
+spec:
+  jobsToBeCloned:
+    - name: job-example-error # Job name that will cloned
+---
+# Workflow that will clones the "job-example-random-exit" Job and
+# triggers the "workflow-example-some-failures" Workflow on any Job failure
+apiVersion: simple-cicd.jlsalvador.online/v1alpha1
+kind: Workflow
+metadata:
+  name: workflow-example
+spec:
+  jobsToBeCloned:
+    - name: job-example-random-exit # Job name that will cloned
+  next:
+    - name: workflow-example-some-failures
+      when: OnAnyFailure # Only run this Workflow if some of the jobsToBeCloned fails
+---
+# WorkflowWebhook set the simple-cicd operator to listen for requests on the path "$namespace/$name"
+apiVersion: simple-cicd.jlsalvador.online/v1alpha1
+kind: WorkflowWebhook
+metadata:
+  name: workflowwebhook-example
+spec:
+  workflows:
+    - name: workflow-example # Workflow that will be initiated

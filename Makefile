@@ -1,223 +1,222 @@
-# Semantic Versioning
-BUILD_CURRENT_VERSION := $(strip $(shell git describe --tags --match='[0-9]*.[0-9]*.[0-9]*' 2>/dev/null || printf 0.0.1))
-BUILD_VERSION_MAJOR ?= $(word 1, $(subst ., ,$(BUILD_CURRENT_VERSION)))
-BUILD_VERSION_MINOR ?= $(word 2, $(subst ., ,$(BUILD_CURRENT_VERSION)))
-BUILD_VERSION_PATCH ?= $(word 3, $(subst ., ,$(BUILD_CURRENT_VERSION)))
+# ============================================================================
+# simple-cicd Makefile
+# ============================================================================
 
-LDFLAGS=\
-	-X github.com/jlsalvador/simple-cicd/internal/buildinfo.Major=$(BUILD_VERSION_MAJOR) \
-	-X github.com/jlsalvador/simple-cicd/internal/buildinfo.Minor=$(BUILD_VERSION_MINOR) \
-	-X github.com/jlsalvador/simple-cicd/internal/buildinfo.Patch=$(BUILD_VERSION_PATCH) \
-	-w -s
+IMAGE_REGISTRY  ?= ghcr.io/jlsalvador
+IMAGE_NAME      ?= simple-cicd
+# IMAGE_TAG defaults to the git-derived version; override as needed
+IMAGE_TAG       ?= $(VERSION)
+IMAGE           := $(IMAGE_REGISTRY)/$(IMAGE_NAME):$(IMAGE_TAG)
 
-# Image URL to use all building/pushing image targets
-IMG ?= controller:latest
-# ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
-ENVTEST_K8S_VERSION = 1.28.0
+NAMESPACE       ?= simple-cicd
 
-# Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
-ifeq (,$(shell go env GOBIN))
-GOBIN=$(shell go env GOPATH)/bin
-else
-GOBIN=$(shell go env GOBIN)
-endif
+# Version is read from the latest git tag (e.g. v1.2.3).
+# Override with: make build VERSION=v0.0.1
+VERSION         ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
+VERSION_PKG     := github.com/jlsalvador/simple-cicd/internal/version
+LDFLAGS         := -s -w -X $(VERSION_PKG).Version=$(VERSION)
+GOFLAGS         ?= -trimpath -ldflags="$(LDFLAGS)"
 
-# CONTAINER_TOOL defines the container tool to be used for building images.
-# Be aware that the target commands are only tested with Docker which is
-# scaffolded by default. However, you might want to replace it to use other
-# tools. (i.e. podman)
-CONTAINER_TOOL ?= docker
+PLATFORMS       ?= linux/amd64,linux/arm64,linux/ppc64le,linux/s390x
+BUILDX_BUILDER  ?= simple-cicd-builder
 
-# Setting SHELL to bash allows bash commands to be executed by recipes.
-# Options are set to exit when a recipe line exits non-zero or a piped command fails.
-SHELL = /usr/bin/env bash -o pipefail
-.SHELLFLAGS = -ec
+# ============================================================================
+# Build
+# ============================================================================
 
-.PHONY: all
-all: build
+.PHONY: build
+build: ## Build the operator binary for the host platform
+	CGO_ENABLED=0 go build $(GOFLAGS) -o bin/simple-cicd ./cmd/simple-cicd
 
-##@ General
-
-# The help target prints out all targets with their descriptions organized
-# beneath their categories. The categories are represented by '##@' and the
-# target descriptions by '##'. The awk command is responsible for reading the
-# entire set of makefiles included in this invocation, looking for lines of the
-# file as xyz: ## something, and then pretty-format the target and help. Then,
-# if there's a line with ##@ something, that gets pretty-printed as a category.
-# More info on the usage of ANSI control characters for terminal formatting:
-# https://en.wikipedia.org/wiki/ANSI_escape_code#SGR_parameters
-# More info on the awk command:
-# http://linuxcommand.org/lc3_adv_awk.php
-
-.PHONY: help
-help: ## Display this help.
-	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n"} /^[a-zA-Z_0-9-]+:.*?##/ { printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
-
-##@ Development
-
-.PHONY: manifests
-manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and CustomResourceDefinition objects.
-	$(CONTROLLER_GEN) rbac:roleName=manager-role crd webhook paths="./..." output:crd:artifacts:config=config/crd/bases
-
-.PHONY: generate
-generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
-	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
+.PHONY: build-all
+build-all: ## Cross-compile binaries for all supported platforms
+	$(foreach platform,\
+		linux/amd64 linux/arm64 linux/ppc64le linux/s390x,\
+		$(eval OS   := $(word 1,$(subst /, ,$(platform))))\
+		$(eval ARCH := $(word 2,$(subst /, ,$(platform))))\
+		CGO_ENABLED=0 GOOS=$(OS) GOARCH=$(ARCH) \
+			go build $(GOFLAGS) \
+			-o bin/simple-cicd-$(OS)-$(ARCH) ./cmd/simple-cicd ;)
 
 .PHONY: fmt
-fmt: ## Run go fmt against code.
+fmt: ## Run go fmt
 	go fmt ./...
 
 .PHONY: vet
-vet: ## Run go vet against code.
+vet: ## Run go vet
 	go vet ./...
 
-.PHONY: cyclo
-cyclo: gocyclo ## Run gocyclo against code.
-	$(GOCYCLO) -over 15 .
-
-.PHONY: cyclo-report
-cyclo-report: gocyclo ## Report gocyclo against code.
-	$(GOCYCLO) -top 15 .
-
-.PHONY: test-ginkgo
-test-ginkgo: envtest ginkgo ## Run ginkgo against code.
-	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" $(GINKGO) -v ./...
-
-.PHONY: test-misspell
-test-misspell: misspell ## Run misspell against code.
-	$(MISSPELL) -error api cmd config hack internal pkg Dockerfile LICENSE Makefile PROJECT README.md
-
 .PHONY: test
-test: manifests generate fmt vet test-misspell cyclo envtest ## Run tests.
-	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test ./... -coverprofile cover.out
+test: ## Run all tests
+	go test -race -count=1 ./...
 
-##@ Build
+.PHONY: check
+check: fmt vet test ## Run fmt + vet + test
 
-.PHONY: build
-build: manifests generate fmt vet cyclo ## Build manager binary.
-	go build -trimpath -ldflags="$(LDFLAGS)" -o bin/manager ./cmd
+# ============================================================================
+# Docker - multi-platform via buildx
+# ============================================================================
 
-.PHONY: run
-run: manifests generate fmt vet cyclo ## Run a controller from your host.
-	go run ./cmd/main.go
+.PHONY: docker-builder-create
+docker-builder-create: ## Create (once) the buildx builder with multi-platform support
+	docker buildx inspect $(BUILDX_BUILDER) > /dev/null 2>&1 || \
+		docker buildx create \
+			--name $(BUILDX_BUILDER) \
+			--driver docker-container \
+			--platform $(PLATFORMS) \
+			--bootstrap
 
-# If you wish to build the manager image targeting other platforms you can use the --platform flag.
-# (i.e. docker build --platform linux/arm64). However, you must enable docker buildKit for it.
-# More info: https://docs.docker.com/develop/develop-images/build_enhancements/
 .PHONY: docker-build
-docker-build: ## Build docker image with the manager.
-	$(CONTAINER_TOOL) build --build-arg="LDFLAGS=$(LDFLAGS)" -t ${IMG} .
+docker-build: docker-builder-create ## Build multi-platform image (local cache only, no push)
+	docker buildx build \
+		--builder $(BUILDX_BUILDER) \
+		--platform $(PLATFORMS) \
+		--build-arg VERSION=$(VERSION) \
+		--tag $(IMAGE) \
+		.
 
 .PHONY: docker-push
-docker-push: ## Push docker image with the manager.
-	$(CONTAINER_TOOL) push ${IMG}
+docker-push: docker-builder-create ## Build and push multi-platform image to the registry
+	docker buildx build \
+		--builder $(BUILDX_BUILDER) \
+		--platform $(PLATFORMS) \
+		--build-arg VERSION=$(VERSION) \
+		--tag $(IMAGE) \
+		--push \
+		.
 
-# PLATFORMS defines the target platforms for the manager image be built to provide support to multiple
-# architectures. (i.e. make docker-buildx IMG=myregistry/mypoperator:0.0.1). To use this option you need to:
-# - be able to use docker buildx. More info: https://docs.docker.com/build/buildx/
-# - have enabled BuildKit. More info: https://docs.docker.com/develop/develop-images/build_enhancements/
-# - be able to push the image to your registry (i.e. if you do not set a valid value via IMG=<myregistry/image:<tag>> then the export will fail)
-# To adequately provide solutions that are compatible with multiple platforms, you should consider using this option.
-PLATFORMS ?= linux/arm64,linux/amd64,linux/s390x,linux/ppc64le
-.PHONY: docker-buildx
-docker-buildx: ## Build and push docker image for the manager for cross-platform support
-	# copy existing Dockerfile and insert --platform=${BUILDPLATFORM} into Dockerfile.cross, and preserve the original Dockerfile
-	sed -e '1 s/\(^FROM\)/FROM --platform=\$$\{BUILDPLATFORM\}/; t' -e ' 1,// s//FROM --platform=\$$\{BUILDPLATFORM\}/' Dockerfile > Dockerfile.cross
-	- $(CONTAINER_TOOL) buildx create --name project-v3-builder
-	$(CONTAINER_TOOL) buildx use project-v3-builder
-	- $(CONTAINER_TOOL) buildx build --build-arg="LDFLAGS=$(LDFLAGS)" --push --platform=$(PLATFORMS) --tag ${IMG} -f Dockerfile.cross .
-	- $(CONTAINER_TOOL) buildx rm project-v3-builder
-	rm Dockerfile.cross
+.PHONY: docker-build-push
+docker-build-push: docker-push ## Alias for docker-push (build + push in one step)
 
-##@ Deployment
+.PHONY: docker-builder-rm
+docker-builder-rm: ## Remove the buildx builder
+	docker buildx rm $(BUILDX_BUILDER) 2>/dev/null || true
 
-ifndef ignore-not-found
-  ignore-not-found = false
-endif
+# ============================================================================
+# Deploy
+# ============================================================================
 
-.PHONY: install
-install: manifests kustomize ## Install CRDs into the K8s cluster specified in ~/.kube/config.
-	$(KUSTOMIZE) build config/crd | $(KUBECTL) apply -f -
+.PHONY: namespace
+namespace: ## Create the operator namespace (idempotent)
+	kubectl create namespace $(NAMESPACE) --dry-run=client -o yaml | kubectl apply -f -
 
-.PHONY: uninstall
-uninstall: manifests kustomize ## Uninstall CRDs from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.
-	$(KUSTOMIZE) build config/crd | $(KUBECTL) delete --ignore-not-found=$(ignore-not-found) -f -
+.PHONY: install-crds
+install-crds: ## Install (or upgrade) the three CRDs into the cluster
+	kubectl apply -f deploy/crds/workflows.yaml
+	kubectl apply -f deploy/crds/workflowwebhooks.yaml
+	kubectl apply -f deploy/crds/workflowwebhookrequests.yaml
+	kubectl wait --for condition=established --timeout=30s \
+		crd/workflows.simple-cicd.jlsalvador.online \
+		crd/workflowwebhooks.simple-cicd.jlsalvador.online \
+		crd/workflowwebhookrequests.simple-cicd.jlsalvador.online
+
+.PHONY: uninstall-crds
+uninstall-crds: ## Remove the three CRDs (WARNING: also deletes ALL custom resources!)
+	kubectl delete -f deploy/crds/ --ignore-not-found
 
 .PHONY: deploy
-deploy: manifests kustomize ## Deploy controller to the K8s cluster specified in ~/.kube/config.
-	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
-	$(KUSTOMIZE) build config/default | $(KUBECTL) apply -f -
+deploy: namespace install-crds ## Apply CRDs + all operator manifests
+	kubectl apply -f deploy/serviceaccount.yaml
+	kubectl apply -f deploy/clusterrole.yaml
+	kubectl apply -f deploy/clusterrolebinding.yaml
+	kubectl apply -f deploy/deployment.yaml
+	kubectl apply -f deploy/service.yaml
 
 .PHONY: undeploy
-undeploy: ## Undeploy controller from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.
-	$(KUSTOMIZE) build config/default | $(KUBECTL) delete --ignore-not-found=$(ignore-not-found) -f -
+undeploy: ## Remove all operator manifests (does NOT delete CRDs)
+	kubectl delete -f deploy/service.yaml         --ignore-not-found
+	kubectl delete -f deploy/deployment.yaml      --ignore-not-found
+	kubectl delete -f deploy/clusterrolebinding.yaml --ignore-not-found
+	kubectl delete -f deploy/clusterrole.yaml     --ignore-not-found
+	kubectl delete -f deploy/serviceaccount.yaml  --ignore-not-found
 
-##@ Build Dependencies
+.PHONY: restart
+restart: ## Roll out a fresh deployment (pulls the latest image)
+	kubectl rollout restart deployment/simple-cicd -n $(NAMESPACE)
 
-## Location to install dependencies to
-LOCALBIN ?= $(shell pwd)/bin
-$(LOCALBIN):
-	mkdir -p $(LOCALBIN)
+.PHONY: status
+status: ## Show rollout status
+	kubectl rollout status deployment/simple-cicd -n $(NAMESPACE)
 
-## Tool Binaries
-KUBECTL ?= kubectl
-KUSTOMIZE ?= $(LOCALBIN)/kustomize
-CONTROLLER_GEN ?= $(LOCALBIN)/controller-gen
-ENVTEST ?= $(LOCALBIN)/setup-envtest
-HELMIFY ?= $(LOCALBIN)/helmify
-GINKGO ?= $(LOCALBIN)/ginkgo
-GOCYCLO ?= $(LOCALBIN)/gocyclo
-MISSPELL ?= $(LOCALBIN)/misspell
+.PHONY: logs
+logs: ## Tail operator logs
+	kubectl logs -n $(NAMESPACE) -l app=simple-cicd --follow
 
-## Tool Versions
-KUSTOMIZE_VERSION ?= v5.1.1
-CONTROLLER_TOOLS_VERSION ?= v0.13.0
-ENVTEST_VERSION ?= latest
-GINKGO_VERSION ?= latest
-HELMIFY_VERSION ?= latest
-GOCYCLO_VERSION ?= latest
-MISSPELL_VERSION ?= latest
 
-.PHONY: kustomize
-kustomize: $(KUSTOMIZE) ## Download kustomize locally if necessary. If wrong version is installed, it will be removed before downloading.
-$(KUSTOMIZE): $(LOCALBIN)
-	@if test -x $(LOCALBIN)/kustomize && ! $(LOCALBIN)/kustomize version | grep -q $(KUSTOMIZE_VERSION); then \
-		echo "$(LOCALBIN)/kustomize version is not expected $(KUSTOMIZE_VERSION). Removing it before installing."; \
-		rm -rf $(LOCALBIN)/kustomize; \
-	fi
-	test -s $(LOCALBIN)/kustomize || GOBIN=$(LOCALBIN) GO111MODULE=on go install sigs.k8s.io/kustomize/kustomize/v5@$(KUSTOMIZE_VERSION)
+# ============================================================================
+# Helm
+# ============================================================================
 
-.PHONY: controller-gen
-controller-gen: $(CONTROLLER_GEN) ## Download controller-gen locally if necessary. If wrong version is installed, it will be overwritten.
-$(CONTROLLER_GEN): $(LOCALBIN)
-	test -s $(LOCALBIN)/controller-gen && $(LOCALBIN)/controller-gen --version | grep -q $(CONTROLLER_TOOLS_VERSION) || \
-	GOBIN=$(LOCALBIN) go install sigs.k8s.io/controller-tools/cmd/controller-gen@$(CONTROLLER_TOOLS_VERSION)
+CHART_DIR       ?= charts/simple-cicd
+HELM_RELEASE    ?= simple-cicd
+HELM_NAMESPACE  ?= $(NAMESPACE)
 
-.PHONY: envtest
-envtest: $(ENVTEST) ## Download envtest-setup locally if necessary.
-$(ENVTEST): $(LOCALBIN)
-	test -s $(LOCALBIN)/setup-envtest || GOBIN=$(LOCALBIN) go install sigs.k8s.io/controller-runtime/tools/setup-envtest@$(ENVTEST_VERSION)
+.PHONY: helm-lint
+helm-lint: ## Lint the Helm chart
+	helm lint $(CHART_DIR)
 
-.PHONY: helmify
-helmify: $(HELMIFY) ## Download helmify locally if necessary.
-$(HELMIFY): $(LOCALBIN)
-	test -s $(LOCALBIN)/helmify || GOBIN=$(LOCALBIN) go install github.com/arttor/helmify/cmd/helmify@$(HELMIFY_VERSION)
+.PHONY: helm-template
+helm-template: ## Render chart templates to stdout (dry-run)
+	helm template $(HELM_RELEASE) $(CHART_DIR) \
+		--namespace $(HELM_NAMESPACE) \
+		--set image.repository=$(IMAGE_REGISTRY)/$(IMAGE_NAME) \
+		--set image.tag=$(VERSION)
 
-.PHONY: ginkgo
-ginkgo: $(GINKGO) ## Download ginkgo locally if necessary.
-$(GINKGO): $(LOCALBIN)
-	test -s $(LOCALBIN)/ginkgo || GOBIN=$(LOCALBIN) go install github.com/onsi/ginkgo/v2/ginkgo@$(GINKGO_VERSION)
+.PHONY: helm-install
+helm-install: ## Install the chart (first time)
+	helm install $(HELM_RELEASE) $(CHART_DIR) \
+		--namespace $(HELM_NAMESPACE) \
+		--create-namespace \
+		--set image.repository=$(IMAGE_REGISTRY)/$(IMAGE_NAME) \
+		--set image.tag=$(VERSION)
 
-.PHONY: gocyclo
-gocyclo: $(GOCYCLO) ## Download gocyclo locally if necessary.
-$(GOCYCLO): $(LOCALBIN)
-	test -s $(LOCALBIN)/gocyclo || GOBIN=$(LOCALBIN) go install github.com/fzipp/gocyclo/cmd/gocyclo@$(GOCYCLO_VERSION)
+.PHONY: helm-upgrade
+helm-upgrade: ## Upgrade an existing chart release
+	helm upgrade $(HELM_RELEASE) $(CHART_DIR) \
+		--namespace $(HELM_NAMESPACE) \
+		--set image.repository=$(IMAGE_REGISTRY)/$(IMAGE_NAME) \
+		--set image.tag=$(VERSION)
 
-.PHONY: misspell
-misspell: $(MISSPELL) ## Download misspell locally if necessary.
-$(MISSPELL): $(LOCALBIN)
-	test -s $(LOCALBIN)/misspell || GOBIN=$(LOCALBIN) go install github.com/client9/misspell/cmd/misspell@$(MISSPELL_VERSION)
+.PHONY: helm-uninstall
+helm-uninstall: ## Uninstall the chart release (does NOT delete CRDs)
+	helm uninstall $(HELM_RELEASE) --namespace $(HELM_NAMESPACE)
 
-.PHONY: helm
-helm: manifests kustomize helmify
-	$(KUSTOMIZE) build config/default | $(HELMIFY) -crd-dir charts/simple-cicd
+.PHONY: helm-manifests
+helm-manifests: ## Render chart into a single install.yaml (kubectl apply -f install.yaml)
+	@mkdir -p bin
+	helm template $(HELM_RELEASE) $(CHART_DIR) \
+		--namespace $(HELM_NAMESPACE) \
+		--set image.repository=$(IMAGE_REGISTRY)/$(IMAGE_NAME) \
+		--set image.tag=$(VERSION) \
+		--include-crds \
+		> bin/install.yaml
+	@echo "Generated bin/install.yaml"
+
+.PHONY: helm-package
+helm-package: ## Package the chart into a .tgz in bin/
+	@mkdir -p bin
+	helm package $(CHART_DIR) --destination bin/
+
+# ============================================================================
+# Run locally (outside the cluster - requires a valid kubeconfig)
+# ============================================================================
+
+.PHONY: run
+run: ## Run the operator locally using KUBECONFIG
+	@echo "NOTE: override K8S_HOST and SA_DIR if running outside the cluster"
+	go run ./cmd/simple-cicd
+
+# ============================================================================
+# Misc
+# ============================================================================
+
+.PHONY: clean
+clean: ## Remove build artefacts
+	rm -rf bin/
+
+.PHONY: help
+help: ## Show this help
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
+		| awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-22s\033[0m %s\n", $$1, $$2}'
+
+.DEFAULT_GOAL := help

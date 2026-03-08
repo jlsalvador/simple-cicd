@@ -1,0 +1,65 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: workflowwebhooks.simple-cicd.jlsalvador.online
+spec:
+  group: simple-cicd.jlsalvador.online
+  names:
+    kind: WorkflowWebhook
+    listKind: WorkflowWebhookList
+    plural: workflowwebhooks
+    shortNames:
+    - ww
+    singular: workflowwebhook
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - description: When is true, any referred WorkflowWebhookRequest will be dropped.
+      jsonPath: .spec.suspend
+      name: Suspend
+      type: boolean
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: WorkflowWebhook is the Schema for the workflowwebhooks API
+        properties:
+          apiVersion:
+            type: string
+          kind:
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: WorkflowWebhookSpec defines the desired state of WorkflowWebhook
+            properties:
+              concurrencyPolicy:
+                default: Allow
+                description: "ConcurrencyPolicy specifies how concurrent executions
+                  of WorkflowWebhookRequests should be treated."
+                enum:
+                - Allow
+                - Forbid
+                - Replace
+                type: string
+              suspend:
+                default: false
+                description: When is true, any WorkflowWebhookRequest that refers
+                  to this WorkflowWebhook will be dropped. Defaults to false.
+                type: boolean
+              workflows:
+                description: Specifies the list of Workflows to run.
+                items:
+                  properties:
+                    name:
+                      type: string
+                  required:
+                  - name
+                  type: object
+                type: array
+            required:
+            - workflows
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources: {}
