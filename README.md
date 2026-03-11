@@ -1,6 +1,6 @@
 # Simple CI/CD
 
-![Simple CI/CD Logo](img/logo.png)
+![Simple CI/CD Logo](docs/img/logo.png)
 
 A lightweight Kubernetes-native CI/CD operator that triggers Workflows via webhooks and orchestrates Jobs — with no external dependencies, no virtual machines, and no Docker-in-Docker.
 
