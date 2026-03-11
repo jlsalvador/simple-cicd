@@ -19,6 +19,7 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: job-example-error
+  namespace: default # Job namespace. Optional
 spec:
   suspend: true # Required to be true to disallow Kubernetes to start this job when it will be created
   template:
@@ -46,9 +47,11 @@ apiVersion: simple-cicd.jlsalvador.online/v1alpha1
 kind: Workflow
 metadata:
   name: workflow-example-some-failures
+  namespace: default # Workflow namespace. Optional.
 spec:
   jobsToBeCloned:
     - name: job-example-error # Job name that will cloned
+      namespace: default # Job namespace. Optional.
 ---
 # Workflow that will clones the "job-example-random-exit" Job and
 # triggers the "workflow-example-some-failures" Workflow on any Job failure
@@ -61,6 +64,7 @@ spec:
     - name: job-example-random-exit # Job name that will cloned
   next:
     - name: workflow-example-some-failures
+      namespace: default # Workflow namespace. Optional.
       when: OnAnyFailure # Only run this Workflow if some of the jobsToBeCloned fails
 ---
 # WorkflowWebhook set the simple-cicd operator to listen for requests on the path "$namespace/$name"
