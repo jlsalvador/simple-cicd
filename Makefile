@@ -53,6 +53,26 @@ test: ## Run all tests
 .PHONY: check
 check: fmt vet test ## Run fmt + vet + test
 
+.PHONY: _mkdir_build
+_mkdir_build:
+	mkdir -p bin
+
+bin/cover.out: _mkdir_build
+	go test \
+		-covermode=count \
+		-coverprofile "bin/cover.out" \
+		$(shell go list ./... | grep -v /vendor/ | tr '\n' ' ')
+
+bin/cover.txt: bin/cover.out
+	go tool cover -func="bin/cover.out" -o "bin/cover.txt"
+
+bin/cover.html: bin/cover.out
+	go tool cover -html="bin/cover.out" -o "bin/cover.html"
+
+.PHONY: cover
+cover: bin/cover.txt bin/cover.html ## Generate coverage reports.
+	@echo "total: "$(shell grep "total:" bin/cover.txt | awk '{print $$3}')
+
 # ============================================================================
 # Docker - multi-platform via buildx
 # ============================================================================
