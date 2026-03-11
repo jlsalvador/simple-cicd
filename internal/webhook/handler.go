@@ -57,6 +57,14 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Verify the WorkflowWebhook exists before doing anything else.
+	// Returning 404 here avoids creating orphaned WWRs for unknown webhooks.
+	if _, err := h.client.GetWorkflowWebhook(namespace, webhookName); err != nil {
+		log.Printf("[webhook] WorkflowWebhook %s/%s not found: %v", namespace, webhookName, err)
+		http.Error(w, fmt.Sprintf("WorkflowWebhook %q not found in namespace %q", webhookName, namespace), http.StatusNotFound)
+		return
+	}
+
 	// Embed the HTTP request data directly in the WWR spec (base64-encoded).
 	//
 	// A Secret is created per cloned job at reconcile time, in the job's own

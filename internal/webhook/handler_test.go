@@ -23,9 +23,10 @@ import (
 // handlerFakeClient only needs CreateWWR (the handler does nothing else with
 // the client).
 type handlerFakeClient struct {
-	mu          sync.Mutex
-	createdWWRs []*types.WorkflowWebhookRequest
-	failCreate  bool
+	mu              sync.Mutex
+	createdWWRs     []*types.WorkflowWebhookRequest
+	failCreate      bool
+	webhookNotFound bool // when true, GetWorkflowWebhook returns an error
 }
 
 var _ k8s.ClientIface = (*handlerFakeClient)(nil)
@@ -47,7 +48,10 @@ func (f *handlerFakeClient) CreateWWR(wwr *types.WorkflowWebhookRequest) (*types
 // Stub implementations for unused methods:
 func (f *handlerFakeClient) GetWorkflow(_, _ string) (*types.Workflow, error) { return nil, nil }
 func (f *handlerFakeClient) GetWorkflowWebhook(_, _ string) (*types.WorkflowWebhook, error) {
-	return nil, nil
+	if f.webhookNotFound {
+		return nil, fmt.Errorf("not found")
+	}
+	return &types.WorkflowWebhook{}, nil
 }
 func (f *handlerFakeClient) GetWWR(_, _ string) (*types.WorkflowWebhookRequest, error) {
 	return nil, nil
@@ -250,6 +254,30 @@ func TestHandler_ResponseContainsWWRName(t *testing.T) {
 	respBody, _ := io.ReadAll(rr.Body)
 	if !strings.Contains(string(respBody), "my-hook") {
 		t.Errorf("response body should mention the WWR name, got: %q", string(respBody))
+	}
+}
+
+// --------------------------------------------------------------------------
+// ServeHTTP: WorkflowWebhook does not exist → 404, no WWR created
+// --------------------------------------------------------------------------
+
+func TestHandler_WebhookNotFound(t *testing.T) {
+	fc := &handlerFakeClient{webhookNotFound: true}
+	triggered := false
+	h := NewHandler(fc, func() { triggered = true })
+
+	req := httptest.NewRequest(http.MethodPost, "/default/nonexistent-hook", strings.NewReader("{}"))
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusNotFound {
+		t.Errorf("expected 404 when WorkflowWebhook does not exist, got %d", rr.Code)
+	}
+	if len(fc.createdWWRs) != 0 {
+		t.Errorf("expected no WWR to be created, got %d", len(fc.createdWWRs))
+	}
+	if triggered {
+		t.Errorf("expected triggerFn not to be called")
 	}
 }
 
