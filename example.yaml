@@ -1,8 +1,19 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: example
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: crossns-example
+---
 # Job that randomly exits with code 0 or 1 (OK or Error)
 apiVersion: batch/v1
 kind: Job
 metadata:
   name: job-example-random-exit
+  namespace: example
 spec:
   suspend: true # Required to be true to disallow Kubernetes to start this job when it will be created
   backoffLimit: 0 # If this Job fail do not try to run it again
@@ -19,7 +30,7 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: job-example-error
-  namespace: default # Job namespace. Optional
+  namespace: crossns-example # Job namespace. Optional
 spec:
   suspend: true # Required to be true to disallow Kubernetes to start this job when it will be created
   template:
@@ -47,11 +58,11 @@ apiVersion: simple-cicd.jlsalvador.online/v1alpha1
 kind: Workflow
 metadata:
   name: workflow-example-some-failures
-  namespace: default # Workflow namespace. Optional.
+  namespace: crossns-example # Workflow namespace. Optional.
 spec:
   jobsToBeCloned:
     - name: job-example-error # Job name that will cloned
-      namespace: default # Job namespace. Optional.
+      namespace: crossns-example # Job namespace. Optional.
 ---
 # Workflow that will clones the "job-example-random-exit" Job and
 # triggers the "workflow-example-some-failures" Workflow on any Job failure
@@ -59,12 +70,13 @@ apiVersion: simple-cicd.jlsalvador.online/v1alpha1
 kind: Workflow
 metadata:
   name: workflow-example
+  namespace: example
 spec:
   jobsToBeCloned:
     - name: job-example-random-exit # Job name that will cloned
   next:
     - name: workflow-example-some-failures
-      namespace: default # Workflow namespace. Optional.
+      namespace: crossns-example # Workflow namespace. Optional.
       when: OnAnyFailure # Only run this Workflow if some of the jobsToBeCloned fails
 ---
 # WorkflowWebhook set the simple-cicd operator to listen for requests on the path "$namespace/$name"
@@ -72,6 +84,7 @@ apiVersion: simple-cicd.jlsalvador.online/v1alpha1
 kind: WorkflowWebhook
 metadata:
   name: workflowwebhook-example
+  namespace: example
 spec:
   workflows:
     - name: workflow-example # Workflow that will be initiated
