@@ -150,7 +150,7 @@ spec:
 #### Concurrency policies
 
 | Policy | Behaviour |
-|--------|-----------|
+| ------ | --------- |
 | `Allow` | Multiple WWRs can run simultaneously (default) |
 | `Forbid` | Rejects new requests while a WWR is still running |
 | `Replace` | Deletes any running WWR and starts a fresh one |
@@ -158,7 +158,7 @@ spec:
 #### `when` conditions
 
 | Value | Trigger condition |
-|-------|-------------------|
+| ----- | ----------------- |
 | `OnSuccess` | All Jobs in the step succeeded (default) |
 | `OnAnySuccess` | At least one Job succeeded |
 | `OnFailure` | All Jobs in the step failed |
