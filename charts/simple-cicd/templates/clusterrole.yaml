@@ -18,7 +18,7 @@ rules:
   # Create request Secrets for job pods (one per WWR namespace)
   - apiGroups: [""]
     resources: ["secrets"]
-    verbs: ["get", "create", "patch"]
+    verbs: ["create"]
 
   # Clone and inspect batch Jobs
   - apiGroups: ["batch"]

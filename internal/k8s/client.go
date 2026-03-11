@@ -18,7 +18,7 @@ const (
 	serviceAccountDir = "/var/run/secrets/kubernetes.io/serviceaccount"
 	k8sHost           = "https://10.96.0.1:443"
 
-	// API path prefix for the custom resources
+	// API path prefix for the custom resources.
 	crdAPIPrefix = "/apis/" + types.APIGroup + "/" + types.APIVersion
 )
 
@@ -208,6 +208,20 @@ func (c *Client) UpdateWWRStatus(wwr *types.WorkflowWebhookRequest) error {
 	return c.mergePatch(path, patch)
 }
 
+// PatchWWRFinalizers replaces the finalizers list on the WWR.
+// A merge-patch on metadata.finalizers replaces the whole slice, which is
+// fine since we only manage a single finalizer.
+func (c *Client) PatchWWRFinalizers(wwr *types.WorkflowWebhookRequest) error {
+	path := fmt.Sprintf("%s/namespaces/%s/workflowwebhookrequests/%s",
+		crdAPIPrefix, wwr.Metadata.Namespace, wwr.Metadata.Name)
+	patch := map[string]any{
+		"metadata": map[string]any{
+			"finalizers": wwr.Metadata.Finalizers,
+		},
+	}
+	return c.mergePatch(path, patch)
+}
+
 // DeleteWWR deletes a WorkflowWebhookRequest by namespace and name.
 func (c *Client) DeleteWWR(namespace, name string) error {
 	path := fmt.Sprintf("%s/namespaces/%s/workflowwebhookrequests/%s", crdAPIPrefix, namespace, name)
@@ -218,53 +232,70 @@ func (c *Client) DeleteWWR(namespace, name string) error {
 // Secrets (v1)
 // --------------------------------------------------------------------------
 
-// CreateSecret posts a Secret and returns the name assigned by the API server.
-func (c *Client) CreateSecret(namespace string, secret map[string]any) (string, error) {
-	path := fmt.Sprintf("/api/v1/namespaces/%s/secrets", namespace)
-	data, status, err := c.doRequest("POST", path, secret, "application/json")
-	if err != nil {
-		return "", err
-	}
-	if status < 200 || status >= 300 {
-		return "", fmt.Errorf("POST secret in %s: status %d: %s", namespace, status, string(data))
-	}
-	var created map[string]any
-	if err := json.Unmarshal(data, &created); err != nil {
-		return "", fmt.Errorf("unmarshal created secret: %w", err)
-	}
-	meta, _ := created["metadata"].(map[string]any)
-	if meta == nil {
-		return "", fmt.Errorf("created secret has no metadata")
-	}
-	name, _ := meta["name"].(string)
-	return name, nil
-}
-
-// SetSecretOwner patches a Secret to add an ownerReference pointing to the
-// given WorkflowWebhookRequest, so the Secret is garbage-collected with the WWR.
-func (c *Client) SetSecretOwner(namespace, secretName string, wwr *types.WorkflowWebhookRequest) error {
-	path := fmt.Sprintf("/api/v1/namespaces/%s/secrets/%s", namespace, secretName)
-	trueVal := true
-	patch := map[string]any{
+// CreateSecretForJob creates a Secret in namespace with the given name (not
+// generateName) containing the HTTP request data from the WWR, already owned
+// by the specified job, ensuring this Secret is garbage-collected when the Job
+// is deleted.
+func (c *Client) CreateSecretForJob(
+	namespace, secretName string,
+	req types.WebhookRequestData,
+	jobName, jobUID string,
+) error {
+	secret := map[string]any{
+		"apiVersion": "v1",
+		"kind":       "Secret",
 		"metadata": map[string]any{
+			"name":      secretName,
+			"namespace": namespace,
+			"labels": map[string]any{
+				types.LabelWWRName:      jobName, // link to the owning job for observability
+				types.LabelWWRNamespace: namespace,
+			},
 			"ownerReferences": []map[string]any{
 				{
-					"apiVersion":         types.APIGroup + "/" + types.APIVersion,
-					"kind":               "WorkflowWebhookRequest",
-					"name":               wwr.Metadata.Name,
-					"uid":                wwr.Metadata.UID,
-					"controller":         &trueVal,
-					"blockOwnerDeletion": &trueVal,
+					"apiVersion":         "batch/v1",
+					"kind":               "Job",
+					"name":               jobName,
+					"uid":                jobUID,
+					"controller":         new(true),
+					"blockOwnerDeletion": new(true),
 				},
 			},
 		},
+		// Values are already base64-encoded by the handler.
+		"data": map[string]string{
+			"body":       req.Body,
+			"headers":    req.Headers,
+			"host":       req.Host,
+			"method":     req.Method,
+			"url":        req.URL,
+			"remoteAddr": req.RemoteAddr,
+			"timestamp":  req.Timestamp,
+			"userAgent":  req.UserAgent,
+		},
 	}
-	return c.mergePatch(path, patch)
+
+	path := fmt.Sprintf("/api/v1/namespaces/%s/secrets", namespace)
+	data, status, err := c.doRequest("POST", path, secret, "application/json")
+	if err != nil {
+		return err
+	}
+	if status < 200 || status >= 300 {
+		return fmt.Errorf("POST secret %s/%s: status %d: %s", namespace, secretName, status, string(data))
+	}
+	return nil
 }
 
 // --------------------------------------------------------------------------
 // Jobs (batch/v1)
 // --------------------------------------------------------------------------
+
+// CreatedResource holds the name and UID returned by the API server after
+// creating a resource.
+type CreatedResource struct {
+	Name string
+	UID  string
+}
 
 // GetJob fetches a Job and returns only the fields we care about for status checks.
 func (c *Client) GetJob(namespace, name string) (*types.Job, error) {
@@ -287,24 +318,45 @@ func (c *Client) GetJobRaw(namespace, name string) (map[string]any, error) {
 	return result, json.Unmarshal(data, &result)
 }
 
-// CreateJobRaw posts a prepared job map and returns the name assigned by the API server.
-func (c *Client) CreateJobRaw(namespace string, job map[string]any) (string, error) {
+// CreateJobRaw posts a prepared job map and returns the name and UID assigned
+// by the API server. The UID is needed to set ownerReferences on the
+// per-job request Secret created immediately after.
+func (c *Client) CreateJobRaw(namespace string, job map[string]any) (CreatedResource, error) {
 	path := fmt.Sprintf("/apis/batch/v1/namespaces/%s/jobs", namespace)
 	data, status, err := c.doRequest("POST", path, job, "application/json")
 	if err != nil {
-		return "", err
+		return CreatedResource{}, err
 	}
 	if status < 200 || status >= 300 {
-		return "", fmt.Errorf("POST job in %s: status %d: %s", namespace, status, string(data))
+		return CreatedResource{}, fmt.Errorf("POST job in %s: status %d: %s", namespace, status, string(data))
 	}
 	var created map[string]any
 	if err := json.Unmarshal(data, &created); err != nil {
-		return "", fmt.Errorf("unmarshal created job: %w", err)
+		return CreatedResource{}, fmt.Errorf("unmarshal created job: %w", err)
 	}
 	meta, _ := created["metadata"].(map[string]any)
 	if meta == nil {
-		return "", fmt.Errorf("created job has no metadata")
+		return CreatedResource{}, fmt.Errorf("created job has no metadata")
 	}
-	name, _ := meta["name"].(string)
-	return name, nil
+	return CreatedResource{
+		Name: meta["name"].(string),
+		UID:  meta["uid"].(string),
+	}, nil
+}
+
+// DeleteJob deletes a Job by namespace and name.
+// Returns nil if the job is already gone (404).
+func (c *Client) DeleteJob(namespace, name string) error {
+	path := fmt.Sprintf("/apis/batch/v1/namespaces/%s/jobs/%s", namespace, name)
+	data, status, err := c.doRequest("DELETE", path, nil, "")
+	if err != nil {
+		return err
+	}
+	if status == http.StatusNotFound {
+		return nil // already deleted.
+	}
+	if status < 200 || status >= 300 {
+		return fmt.Errorf("DELETE job %s/%s: status %d: %s", namespace, name, status, string(data))
+	}
+	return nil
 }

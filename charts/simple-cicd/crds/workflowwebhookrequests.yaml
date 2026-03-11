@@ -52,18 +52,49 @@ spec:
           spec:
             description: WorkflowWebhookRequestSpec defines the desired state of WorkflowWebhookRequest
             properties:
-              requestSecret:
-                description: Reference to the Secret that holds the HTTP request
-                  data (body, headers, host, method, url) that triggered this
-                  WorkflowWebhookRequest. The secret is mounted into every cloned
-                  job pod at /var/run/secrets/kubernetes.io/request/.
+              request:
+                description: >
+                  HTTP request data that triggered this WorkflowWebhookRequest.
+                  All fields are base64-encoded. A Secret containing this data is
+                  created per cloned Job in the Job's own namespace and mounted at
+                  /var/run/secrets/kubernetes.io/request/, enabling cross-namespace
+                  job execution without cross-namespace Secret references.
                 properties:
-                  name:
+                  body:
+                    description: Base64-encoded request body.
                     type: string
-                  namespace:
+                  headers:
+                    description: Base64-encoded JSON map of request headers.
+                    type: string
+                  host:
+                    description: Base64-encoded Host header value.
+                    type: string
+                  method:
+                    description: Base64-encoded HTTP method (GET, POST, …).
+                    type: string
+                  remoteAddr:
+                    description: Base64-encoded remote address of the caller.
+                    type: string
+                  timestamp:
+                    description: >
+                      Base64-encoded Unix epoch (seconds since 1970-01-01 00:00:00 UTC)
+                      at which the webhook was received. Example decoded value: "1735689600".
+                    type: string
+                  url:
+                    description: Base64-encoded request URL.
+                    type: string
+                  userAgent:
+                    description: Base64-encoded User-Agent header value.
                     type: string
                 required:
-                - name
+                - body
+                - headers
+                - host
+                - method
+                - remoteAddr
+                - timestamp
+                - url
+                - userAgent
                 type: object
               workflowWebhook:
                 description: Reference to the WorkflowWebhook.
@@ -76,7 +107,7 @@ spec:
                 - name
                 type: object
             required:
-            - requestSecret
+            - request
             - workflowWebhook
             type: object
           status:
@@ -104,19 +135,41 @@ spec:
                   - type
                   type: object
                 type: array
-              currentJobs:
+              allJobs:
+                description: >
+                  Accumulates every job ref ever cloned for this WorkflowWebhookRequest,
+                  across all namespaces. Used by the cleanup finalizer to explicitly delete
+                  cross-namespace jobs that Kubernetes GC cannot reach (cross-namespace
+                  ownerReferences are disallowed by design in Kubernetes).
                 items:
                   properties:
                     name:
+                      type: string
+                    namespace:
+                      type: string
+                  required:
+                  - name
+                  type: object
+                type: array
+              currentJobs:
+                description: Jobs currently being waited on in the active step.
+                items:
+                  properties:
+                    name:
+                      type: string
+                    namespace:
                       type: string
                   required:
                   - name
                   type: object
                 type: array
               currentWorkflows:
+                description: Workflows active in the current step.
                 items:
                   properties:
                     name:
+                      type: string
+                    namespace:
                       type: string
                   required:
                   - name

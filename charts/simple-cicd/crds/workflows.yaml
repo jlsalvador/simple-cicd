@@ -33,28 +33,38 @@ spec:
             description: WorkflowSpec defines the desired state of Workflow
             properties:
               jobsToBeCloned:
-                description: Jobs to be cloned
+                description: >
+                  Jobs to be cloned when this Workflow is executed. Each entry
+                  may reference a Job in a different namespace; when namespace is
+                  omitted the Workflow's own namespace is used.
                 items:
                   properties:
                     name:
+                      type: string
+                    namespace:
+                      description: >
+                        Namespace of the Job template. Defaults to the Workflow's
+                        namespace when omitted.
                       type: string
                   required:
                   - name
                   type: object
                 type: array
               next:
-                description: Optional list of Workflow to execute next
+                description: Optional list of Workflows to execute next
                 items:
                   properties:
                     name:
                       description: Workflow name
                       type: string
                     namespace:
-                      description: Workflow namespace
+                      description: >
+                        Namespace of the next Workflow. Defaults to the current
+                        Workflow's namespace when omitted.
                       type: string
                     when:
                       default: Always
-                      description: "Describes the conditions for when a Job will be handled."
+                      description: "Describes the conditions for when the next Workflow will run."
                       enum:
                       - OnSuccess
                       - OnAnySuccess
