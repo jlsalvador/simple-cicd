@@ -10,12 +10,18 @@ rules:
     resources: ["workflows", "workflowwebhooks"]
     verbs: ["get", "list", "watch"]
 
-  # Full control over WorkflowWebhookRequests (create, update status, delete)
+  # Full control over WorkflowWebhookRequests (create, read, patch finalizers, delete)
   - apiGroups: ["simple-cicd.jlsalvador.online"]
     resources: ["workflowwebhookrequests"]
-    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+    verbs: ["get", "list", "watch", "create", "patch", "delete"]
 
-  # Create request Secrets for job pods (one per WWR namespace)
+  # Write access to the status subresource (UpdateWWRStatus uses PATCH .../status)
+  - apiGroups: ["simple-cicd.jlsalvador.online"]
+    resources: ["workflowwebhookrequests/status"]
+    verbs: ["patch"]
+
+  # Create request Secrets for job pods (one per cloned job, in the job's namespace).
+  # The ownerReference is set at creation time, so no patch is needed.
   - apiGroups: [""]
     resources: ["secrets"]
     verbs: ["create"]
