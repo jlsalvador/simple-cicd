@@ -17,12 +17,12 @@ import (
 // Handler handles incoming webhook HTTP requests and creates
 // WorkflowWebhookRequest resources in Kubernetes.
 type Handler struct {
-	client    *k8s.Client
+	client    k8s.ClientIface
 	triggerFn func() // called after a WWR is created to wake the reconciler.
 }
 
 // NewHandler creates a Handler.
-func NewHandler(client *k8s.Client, triggerFn func()) *Handler {
+func NewHandler(client k8s.ClientIface, triggerFn func()) *Handler {
 	return &Handler{client: client, triggerFn: triggerFn}
 }
 

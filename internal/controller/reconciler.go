@@ -13,12 +13,12 @@ import (
 //
 // Use [NewReconciler] to create a new Reconciler.
 type Reconciler struct {
-	client    *k8s.Client
+	client    k8s.ClientIface
 	triggerCh chan struct{}
 }
 
 // NewReconciler creates a Reconciler.
-func NewReconciler(client *k8s.Client) *Reconciler {
+func NewReconciler(client k8s.ClientIface) *Reconciler {
 	return &Reconciler{
 		client:    client,
 		triggerCh: make(chan struct{}, 64),
