@@ -203,6 +203,7 @@ spec:
                     namespace:
                       description: Namespace of the cloned Job.
                       type: string
+                      default: ""
                   required:
                   - name
                   type: object
@@ -222,6 +223,7 @@ spec:
                     namespace:
                       description: Namespace of the active Job.
                       type: string
+                      default: ""
                   required:
                   - name
                   type: object
@@ -240,6 +242,7 @@ spec:
                     namespace:
                       description: Namespace of the active Workflow.
                       type: string
+                      default: ""
                   required:
                   - name
                   type: object
