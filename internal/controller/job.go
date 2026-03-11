@@ -55,7 +55,7 @@ func conditionMet(when string, succeeded, failed int) bool {
 
 // prepareJobForCloning deep-copies a raw job map, strips all server-assigned
 // fields, and injects the pre-generated request Secret as a volume.
-func prepareJobForCloning(raw map[string]any, wwr *types.WorkflowWebhookRequest, secretName string) map[string]any {
+func prepareJobForCloning(raw map[string]any, wwr *types.WorkflowWebhookRequest, secretName string, setOwnerRef bool) map[string]any {
 	// Deep copy via round-trip JSON.
 	data, _ := json.Marshal(raw)
 	var cloned map[string]any
@@ -96,19 +96,22 @@ func prepareJobForCloning(raw map[string]any, wwr *types.WorkflowWebhookRequest,
 	labels[types.LabelWWRNamespace] = wwr.Metadata.Namespace
 	meta["labels"] = labels
 
-	// Set ownerReference pointing to the WWR.
-	// For same-namespace jobs this enables Kubernetes GC.
-	// For cross-namespace jobs it serves as an audit trail only; actual
-	// cleanup is performed by the reconciler's finalizer handler.
-	meta["ownerReferences"] = []map[string]any{
-		{
-			"apiVersion":         types.APIGroup + "/" + types.APIVersion,
-			"kind":               "WorkflowWebhookRequest",
-			"name":               wwr.Metadata.Name,
-			"uid":                wwr.Metadata.UID,
-			"controller":         new(true),
-			"blockOwnerDeletion": new(true),
-		},
+	// Only set ownerReference when the job is in the same namespace as the WWR.
+	// Kubernetes GC resolves ownerReferences within a single namespace only;
+	// a cross-namespace reference is treated as absent and causes the GC to
+	// delete the dependent immediately after creation.
+	// Cross-namespace jobs are cleaned up by the WWR's finalizer instead.
+	if setOwnerRef {
+		meta["ownerReferences"] = []map[string]any{
+			{
+				"apiVersion":         types.APIGroup + "/" + types.APIVersion,
+				"kind":               "WorkflowWebhookRequest",
+				"name":               wwr.Metadata.Name,
+				"uid":                wwr.Metadata.UID,
+				"controller":         new(true),
+				"blockOwnerDeletion": new(true),
+			},
+		}
 	}
 	cloned["metadata"] = meta
 

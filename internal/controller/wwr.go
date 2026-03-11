@@ -288,7 +288,13 @@ func (r *Reconciler) cloneJobsForWorkflow(
 		secretName := generateSecretName(wwr.Metadata.Name)
 
 		// Step 2: create the job with the secret volume already declared.
-		cloned := prepareJobForCloning(raw, wwr, secretName)
+		// The ownerReference to the WWR is only set when the job is in the
+		// same namespace: Kubernetes GC silently deletes dependents whose
+		// cross-namespace ownerReferences cannot be resolved, which would
+		// cause jobs to vanish shortly after creation. Cross-namespace job
+		// cleanup is handled exclusively by the finalizer on the WWR.
+		sameNamespace := targetNamespace == wwr.Metadata.Namespace
+		cloned := prepareJobForCloning(raw, wwr, secretName, sameNamespace)
 
 		created, err := r.client.CreateJobRaw(targetNamespace, cloned)
 		if err != nil {
