@@ -3,8 +3,6 @@ kind: CustomResourceDefinition
 metadata:
   name: workflowwebhookrequests.simple-cicd.jlsalvador.online
 spec:
-  conversion:
-    strategy: None
   group: simple-cicd.jlsalvador.online
   names:
     kind: WorkflowWebhookRequest
@@ -16,14 +14,13 @@ spec:
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
-    - description: True when there are not more Jobs to do.
+    - description: True when all Jobs have finished.
       jsonPath: .status.done
       name: Done
       type: boolean
-    - description: How many times CurrentWorkflows have been done.
-      jsonPath: .status.steps
-      name: Steps
-      priority: 1
+    - description: Name of the WorkflowWebhook that originated this request.
+      jsonPath: .spec.workflowWebhook.name
+      name: Webhook
       type: string
     - description: Total number of successful Jobs.
       jsonPath: .status.successfulJobs
@@ -33,7 +30,16 @@ spec:
       jsonPath: .status.failedJobs
       name: Failed Jobs
       type: string
-    - description: Waiting for these Jobs to be done.
+    - description: Age of the WorkflowWebhookRequest.
+      jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    - description: Number of workflow steps completed so far.
+      jsonPath: .status.steps
+      name: Steps
+      priority: 1
+      type: string
+    - description: Jobs currently being waited on in the active step.
       jsonPath: .status.currentJobs
       name: Current Jobs
       priority: 1
@@ -41,7 +47,12 @@ spec:
     name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: WorkflowWebhookRequest is the Schema for the workflowwebhookrequests API
+        description: >
+          WorkflowWebhookRequest represents a single execution triggered by an
+          incoming HTTP request to a WorkflowWebhook endpoint. The operator
+          creates one WorkflowWebhookRequest per incoming request, drives it
+          through all configured Workflow steps, and marks it done when all
+          Jobs have finished.
         properties:
           apiVersion:
             type: string
@@ -50,42 +61,56 @@ spec:
           metadata:
             type: object
           spec:
-            description: WorkflowWebhookRequestSpec defines the desired state of WorkflowWebhookRequest
+            description: >
+              WorkflowWebhookRequestSpec is immutable after creation. It records
+              the WorkflowWebhook that was triggered and the full HTTP request
+              payload, which is later materialised as a Secret in each Job's
+              namespace.
             properties:
               request:
                 description: >
                   HTTP request data that triggered this WorkflowWebhookRequest.
-                  All fields are base64-encoded. A Secret containing this data is
-                  created per cloned Job in the Job's own namespace and mounted at
-                  /var/run/secrets/kubernetes.io/request/, enabling cross-namespace
-                  job execution without cross-namespace Secret references.
+                  All fields are base64-encoded. A Secret containing this data
+                  is created per cloned Job in the Job's own namespace and
+                  mounted at /var/run/secrets/kubernetes.io/request/, enabling
+                  cross-namespace job execution without cross-namespace Secret
+                  references.
                 properties:
                   body:
                     description: Base64-encoded request body.
                     type: string
+                    format: byte
                   headers:
                     description: Base64-encoded JSON map of request headers.
                     type: string
+                    format: byte
                   host:
                     description: Base64-encoded Host header value.
                     type: string
+                    format: byte
                   method:
-                    description: Base64-encoded HTTP method (GET, POST, …).
+                    description: Base64-encoded HTTP method (e.g. GET, POST).
                     type: string
+                    format: byte
                   remoteAddr:
                     description: Base64-encoded remote address of the caller.
                     type: string
+                    format: byte
                   timestamp:
                     description: >
-                      Base64-encoded Unix epoch (seconds since 1970-01-01 00:00:00 UTC)
-                      at which the webhook was received. Example decoded value: "1735689600".
+                      Base64-encoded Unix epoch (seconds since
+                      1970-01-01 00:00:00 UTC) at which the webhook was
+                      received. Example decoded value: "1735689600".
                     type: string
+                    format: byte
                   url:
                     description: Base64-encoded request URL.
                     type: string
+                    format: byte
                   userAgent:
                     description: Base64-encoded User-Agent header value.
                     type: string
+                    format: byte
                 required:
                 - body
                 - headers
@@ -97,12 +122,23 @@ spec:
                 - userAgent
                 type: object
               workflowWebhook:
-                description: Reference to the WorkflowWebhook.
+                description: >
+                  Reference to the WorkflowWebhook that was triggered. The
+                  WorkflowWebhook must exist in the same namespace as this
+                  WorkflowWebhookRequest.
                 properties:
                   name:
+                    description: Name of the WorkflowWebhook.
                     type: string
+                    maxLength: 253
+                    pattern: '^[a-z0-9]([a-z0-9\-\.]*[a-z0-9])?$'
                   namespace:
+                    description: >
+                      Namespace of the WorkflowWebhook. Defaults to the
+                      WorkflowWebhookRequest's namespace when omitted.
                     type: string
+                    maxLength: 63
+                    pattern: '^[a-z0-9]([a-z0-9\-]*[a-z0-9])?$'
                 required:
                 - name
                 type: object
@@ -111,21 +147,36 @@ spec:
             - workflowWebhook
             type: object
           status:
-            description: WorkflowWebhookRequestStatus defines the observed state of a WorkflowWebhookRequest.
+            description: >
+              WorkflowWebhookRequestStatus is written exclusively by the
+              operator. It reflects the current execution state: which Jobs
+              are active, cumulative success/failure counters, and lifecycle
+              timestamps.
             properties:
               conditions:
+                description: >
+                  Conditions describe the latest observations of the
+                  WorkflowWebhookRequest's state. A "Done" condition is
+                  appended when execution finishes (successfully or not).
                 items:
                   properties:
                     lastTransitionTime:
+                      description: Time at which the condition last changed its status.
                       format: date-time
                       type: string
                     message:
+                      description: Human-readable details about the condition.
                       type: string
                     reason:
+                      description: >
+                        Machine-readable reason for the condition (e.g.
+                        "Done", "Suspended", "Forbidden", "NoWorkflows").
                       type: string
                     status:
+                      description: '"True" when the condition is active.'
                       type: string
                     type:
+                      description: Type of condition (e.g. "Done").
                       type: string
                   required:
                   - lastTransitionTime
@@ -135,61 +186,110 @@ spec:
                   - type
                   type: object
                 type: array
+                x-kubernetes-list-type: map
+                x-kubernetes-list-map-keys: [type]
               allJobs:
                 description: >
-                  Accumulates every job ref ever cloned for this WorkflowWebhookRequest,
-                  across all namespaces. Used by the cleanup finalizer to explicitly delete
-                  cross-namespace jobs that Kubernetes GC cannot reach (cross-namespace
-                  ownerReferences are disallowed by design in Kubernetes).
+                  Accumulates every Job ever cloned for this
+                  WorkflowWebhookRequest, across all namespaces and all steps.
+                  Used by the cleanup finalizer to explicitly delete
+                  cross-namespace Jobs that Kubernetes GC cannot reach because
+                  cross-namespace ownerReferences are disallowed by design.
                 items:
                   properties:
                     name:
+                      description: Name of the cloned Job.
                       type: string
                     namespace:
+                      description: Namespace of the cloned Job.
                       type: string
                   required:
                   - name
                   type: object
                 type: array
+                x-kubernetes-list-type: map
+                x-kubernetes-list-map-keys: [namespace, name]
               currentJobs:
-                description: Jobs currently being waited on in the active step.
+                description: >
+                  Jobs currently being waited on in the active workflow step.
+                  Cleared when the step finishes and replaced by the next
+                  step's Jobs (or left empty when done).
                 items:
                   properties:
                     name:
+                      description: Name of the active Job.
                       type: string
                     namespace:
+                      description: Namespace of the active Job.
                       type: string
                   required:
                   - name
                   type: object
                 type: array
+                x-kubernetes-list-type: map
+                x-kubernetes-list-map-keys: [namespace, name]
               currentWorkflows:
-                description: Workflows active in the current step.
+                description: >
+                  Workflows active in the current step. Each entry contributed
+                  at least one Job to currentJobs.
                 items:
                   properties:
                     name:
+                      description: Name of the active Workflow.
                       type: string
                     namespace:
+                      description: Namespace of the active Workflow.
                       type: string
                   required:
                   - name
                   type: object
                 type: array
+                x-kubernetes-list-type: map
+                x-kubernetes-list-map-keys: [namespace, name]
               done:
+                description: >
+                  True when no further Jobs remain to be executed. Once set,
+                  this field is never cleared.
                 type: boolean
                 default: false
               failedJobs:
+                description: >
+                  Cumulative count of Jobs that finished with a failure
+                  condition across all completed steps.
                 type: integer
                 default: 0
               steps:
-                type: integer
-              successfulJobs:
+                description: >
+                  Number of workflow steps completed so far. Incremented each
+                  time the operator advances to a new set of Workflows.
+                  Zero means the WorkflowWebhookRequest has not been
+                  initialised yet.
                 type: integer
                 default: 0
+              successfulJobs:
+                description: >
+                  Cumulative count of Jobs that finished successfully across
+                  all completed steps.
+                type: integer
+                default: 0
+              startTime:
+                description: >
+                  Time at which the operator began executing the first workflow
+                  step (Steps transitioned from 0 to 1). Follows RFC 3339.
+                type: string
+                format: date-time
+              completionTime:
+                description: >
+                  Time at which the operator marked this WorkflowWebhookRequest
+                  as done. Follows RFC 3339. Together with startTime this gives
+                  the total execution duration.
+                type: string
+                format: date-time
             required:
             - steps
             type: object
         type: object
     served: true
     storage: true
-    subresources: {}
+    subresources:
+      status: {}

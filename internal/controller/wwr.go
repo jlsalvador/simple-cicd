@@ -52,6 +52,8 @@ func (r *Reconciler) initialize(wwr *types.WorkflowWebhookRequest) error {
 	wwr.Status.CurrentJobs = currentJobs
 	wwr.Status.AllJobs = append(wwr.Status.AllJobs, currentJobs...)
 	wwr.Status.Steps = 1
+	now := time.Now().UTC()
+	wwr.Status.StartTime = &now
 
 	log.Printf("[reconciler] %s/%s: initialised - %d workflow(s), %d job(s) cloned",
 		wwr.Metadata.Namespace, wwr.Metadata.Name, len(currentWorkflows), len(currentJobs))
@@ -351,10 +353,13 @@ func generateSecretName(wwrName string) string {
 	return wwrName + "-request-" + string(suffix)
 }
 
-// markDone sets Status.Done and appends a condition, then persists the status.
+// markDone sets Status.Done, records the CompletionTime, appends a condition,
+// and persists the status.
 func (r *Reconciler) markDone(wwr *types.WorkflowWebhookRequest, reason, message string) error {
 	wwr.Status.Done = true
 	wwr.Status.CurrentJobs = nil
+	now := time.Now().UTC()
+	wwr.Status.CompletionTime = &now
 	wwr.Status.Conditions = append(wwr.Status.Conditions, types.Condition{
 		LastTransitionTime: time.Now().UTC(),
 		Message:            message,

@@ -14,14 +14,28 @@ spec:
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
-    - description: When is true, the execution of this workflow will be skipped.
+    - description: When true, this Workflow is skipped during execution.
       jsonPath: .spec.suspend
       name: Suspend
       type: boolean
+    - description: Job templates that will be cloned when this Workflow runs.
+      jsonPath: .spec.jobsToBeCloned
+      name: Jobs
+      type: string
+      priority: 1
+    - description: Workflows that may run after this one completes.
+      jsonPath: .spec.next
+      name: Next
+      type: string
+      priority: 1
     name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: Workflow is the Schema for the workflows API
+        description: >
+          Workflow defines a set of Job templates to clone and, optionally, a
+          list of downstream Workflows to trigger once those Jobs complete.
+          Workflows are referenced by WorkflowWebhooks and by other Workflows
+          via their next field, forming an acyclic execution graph.
         properties:
           apiVersion:
             type: string
@@ -30,57 +44,86 @@ spec:
           metadata:
             type: object
           spec:
-            description: WorkflowSpec defines the desired state of Workflow
+            description: WorkflowSpec defines the desired state of a Workflow.
             properties:
               jobsToBeCloned:
                 description: >
-                  Jobs to be cloned when this Workflow is executed. Each entry
-                  may reference a Job in a different namespace; when namespace is
-                  omitted the Workflow's own namespace is used.
+                  Ordered list of Job templates to clone when this Workflow is
+                  executed. At least one entry is required. Each entry may
+                  reference a Job in a different namespace; when namespace is
+                  omitted the Workflow's own namespace is used. All cloned Jobs
+                  run concurrently within the same step.
+                type: array
+                minItems: 1
                 items:
+                  type: object
                   properties:
                     name:
+                      description: Name of the Job template to clone.
                       type: string
+                      maxLength: 253
+                      pattern: '^[a-z0-9]([a-z0-9\-\.]*[a-z0-9])?$'
                     namespace:
                       description: >
-                        Namespace of the Job template. Defaults to the Workflow's
-                        namespace when omitted.
+                        Namespace of the Job template. Defaults to the
+                        Workflow's own namespace when omitted.
                       type: string
+                      maxLength: 63
+                      pattern: '^[a-z0-9]([a-z0-9\-]*[a-z0-9])?$'
                   required:
                   - name
-                  type: object
-                type: array
+                x-kubernetes-list-type: atomic
               next:
-                description: Optional list of Workflows to execute next
+                description: >
+                  Optional ordered list of downstream Workflows to evaluate
+                  once all Jobs in jobsToBeCloned have finished. Each entry
+                  carries a when condition; only entries whose condition is
+                  satisfied will be executed. Entries are deduplicated by
+                  namespace/name before execution.
+                type: array
                 items:
+                  type: object
                   properties:
                     name:
-                      description: Workflow name
+                      description: Name of the downstream Workflow to trigger.
                       type: string
+                      maxLength: 253
+                      pattern: '^[a-z0-9]([a-z0-9\-\.]*[a-z0-9])?$'
                     namespace:
                       description: >
-                        Namespace of the next Workflow. Defaults to the current
-                        Workflow's namespace when omitted.
+                        Namespace of the downstream Workflow. Defaults to the
+                        current Workflow's own namespace when omitted.
                       type: string
+                      maxLength: 63
+                      pattern: '^[a-z0-9]([a-z0-9\-]*[a-z0-9])?$'
                     when:
+                      description: >
+                        Condition that must be satisfied for this downstream
+                        Workflow to run, evaluated against the Jobs in the
+                        current step.
+                        OnSuccess    - all Jobs succeeded (zero failures).
+                        OnAnySuccess - at least one Job succeeded.
+                        OnFailure    - all Jobs failed (zero successes).
+                        OnAnyFailure - at least one Job failed.
+                        Always       - unconditional (default).
+                      type: string
                       default: Always
-                      description: "Describes the conditions for when the next Workflow will run."
                       enum:
                       - OnSuccess
                       - OnAnySuccess
                       - OnFailure
                       - OnAnyFailure
                       - Always
-                      type: string
                   required:
                   - name
-                  type: object
-                type: array
+                x-kubernetes-list-type: atomic
               suspend:
-                default: false
-                description: When is true, the execution of this workflow will be
-                  skipped. Defaults to false.
+                description: >
+                  When true, this Workflow is skipped during execution: its
+                  Jobs are not cloned and its next entries are not evaluated.
+                  Defaults to false.
                 type: boolean
+                default: false
             required:
             - jobsToBeCloned
             type: object

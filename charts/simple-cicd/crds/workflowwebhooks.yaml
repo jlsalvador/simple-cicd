@@ -14,14 +14,21 @@ spec:
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
-    - description: When is true, any referred WorkflowWebhookRequest will be dropped.
+    - description: When true, incoming requests are dropped without creating a WorkflowWebhookRequest.
       jsonPath: .spec.suspend
       name: Suspend
       type: boolean
+    - description: How concurrent WorkflowWebhookRequests are handled (Allow, Forbid, Replace).
+      jsonPath: .spec.concurrencyPolicy
+      name: Concurrency
+      type: string
     name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: WorkflowWebhook is the Schema for the workflowwebhooks API
+        description: >
+          WorkflowWebhook exposes an HTTP endpoint that the simple-cicd operator
+          listens on at /{namespace}/{name}. Each incoming request creates a
+          WorkflowWebhookRequest and triggers the configured Workflows.
         properties:
           apiVersion:
             type: string
@@ -30,32 +37,57 @@ spec:
           metadata:
             type: object
           spec:
-            description: WorkflowWebhookSpec defines the desired state of WorkflowWebhook
+            description: WorkflowWebhookSpec defines the desired state of a WorkflowWebhook.
             properties:
               concurrencyPolicy:
+                description: >
+                  Specifies how to handle a new incoming request when one or
+                  more WorkflowWebhookRequests for this webhook are still
+                  running.
+                  Allow   - allow concurrent executions (default).
+                  Forbid  - drop the new request; it is immediately marked done.
+                  Replace - delete all running WorkflowWebhookRequests and
+                            start fresh with the new one.
+                type: string
                 default: Allow
-                description: "ConcurrencyPolicy specifies how concurrent executions
-                  of WorkflowWebhookRequests should be treated."
                 enum:
                 - Allow
                 - Forbid
                 - Replace
-                type: string
               suspend:
-                default: false
-                description: When is true, any WorkflowWebhookRequest that refers
-                  to this WorkflowWebhook will be dropped. Defaults to false.
+                description: >
+                  When true, any incoming request to this webhook is dropped:
+                  a WorkflowWebhookRequest is created but immediately marked
+                  done without executing any Workflow. Defaults to false.
                 type: boolean
+                default: false
               workflows:
-                description: Specifies the list of Workflows to run.
+                description: >
+                  Ordered list of Workflows to execute when a request arrives.
+                  All listed Workflows form the first step and run concurrently.
+                  At least one entry is required. Each entry may reference a
+                  Workflow in a different namespace; when namespace is omitted
+                  the WorkflowWebhook's own namespace is used.
+                type: array
+                minItems: 1
                 items:
+                  type: object
                   properties:
                     name:
+                      description: Name of the Workflow to execute.
                       type: string
+                      maxLength: 253
+                      pattern: '^[a-z0-9]([a-z0-9\-\.]*[a-z0-9])?$'
+                    namespace:
+                      description: >
+                        Namespace of the Workflow. Defaults to the
+                        WorkflowWebhook's own namespace when omitted.
+                      type: string
+                      maxLength: 63
+                      pattern: '^[a-z0-9]([a-z0-9\-]*[a-z0-9])?$'
                   required:
                   - name
-                  type: object
-                type: array
+                x-kubernetes-list-type: atomic
             required:
             - workflows
             type: object

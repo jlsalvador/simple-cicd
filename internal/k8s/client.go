@@ -216,11 +216,11 @@ func (c *Client) ListAllWWRs() ([]types.WorkflowWebhookRequest, error) {
 	return list.Items, nil
 }
 
-// UpdateWWRStatus patches the status of the given WWR using a merge-patch.
-// Because the CRD does not define a /status subresource, we patch the
-// main resource endpoint.
+// UpdateWWRStatus patches the status subresource of the given WWR.
+// The CRD declares "subresources: status: {}" so we must use the /status
+// endpoint; patching the main resource would silently ignore status fields.
 func (c *Client) UpdateWWRStatus(wwr *types.WorkflowWebhookRequest) error {
-	path := fmt.Sprintf("%s/namespaces/%s/workflowwebhookrequests/%s",
+	path := fmt.Sprintf("%s/namespaces/%s/workflowwebhookrequests/%s/status",
 		crdAPIPrefix, wwr.Metadata.Namespace, wwr.Metadata.Name)
 	patch := map[string]any{
 		"status": wwr.Status,
@@ -254,8 +254,8 @@ func (c *Client) DeleteWWR(namespace, name string) error {
 
 // CreateSecretForJob creates a Secret in namespace with the given name (not
 // generateName) containing the HTTP request data from the WWR, already owned
-// by the specified job, ensuring this Secret is garbage-collected when the Job
-// is deleted.
+// by the specified job. This order (job first, then secret with ownerRef)
+// ensures the Secret is garbage-collected automatically when the Job is deleted.
 func (c *Client) CreateSecretForJob(
 	namespace, secretName string,
 	req types.WebhookRequestData,

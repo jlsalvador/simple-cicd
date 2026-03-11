@@ -11,6 +11,9 @@ const (
 
 	// FinalizerCleanup is added to every WWR so the reconciler can explicitly
 	// delete cross-namespace jobs before the WWR itself is removed.
+	//
+	// Kubernetes GC cannot follow cross-namespace ownerReferences, so this
+	// finalizer ensures those jobs are never orphaned.
 	FinalizerCleanup = APIGroup + "/cleanup"
 
 	// Workflow next conditions
@@ -161,6 +164,10 @@ type WorkflowWebhookRequestStatus struct {
 	FailedJobs       int            `json:"failedJobs,omitempty"`
 	Steps            int            `json:"steps"`
 	SuccessfulJobs   int            `json:"successfulJobs,omitempty"`
+	// StartTime is when the first reconciliation step began (Steps goes 0 → 1).
+	StartTime *time.Time `json:"startTime,omitempty"`
+	// CompletionTime is when the WWR was marked done.
+	CompletionTime *time.Time `json:"completionTime,omitempty"`
 }
 
 type Condition struct {
