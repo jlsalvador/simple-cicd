@@ -16,11 +16,31 @@ import (
 
 const (
 	serviceAccountDir = "/var/run/secrets/kubernetes.io/serviceaccount"
-	k8sHost           = "https://10.96.0.1:443"
 
 	// API path prefix for the custom resources.
 	crdAPIPrefix = "/apis/" + types.APIGroup + "/" + types.APIVersion
 )
+
+// k8sBaseURL returns the Kubernetes API server base URL using the environment
+// variables that the kubelet injects into every pod:
+//
+//	KUBERNETES_SERVICE_HOST – cluster IP of the kubernetes.default.svc service
+//	KUBERNETES_SERVICE_PORT – port (normally 443)
+//
+// Falling back to the well-known default only if the variables are absent
+// (e.g. during local development / unit tests).
+func k8sBaseURL() string {
+	host := os.Getenv("KUBERNETES_SERVICE_HOST")
+	port := os.Getenv("KUBERNETES_SERVICE_PORT")
+	if host == "" || port == "" {
+		return "https://kubernetes.default.svc:443"
+	}
+	// IPv6 addresses must be wrapped in brackets.
+	if strings.Contains(host, ":") {
+		host = "[" + host + "]"
+	}
+	return "https://" + host + ":" + port
+}
 
 // Client performs authenticated requests to the Kubernetes API server.
 type Client struct {
@@ -52,7 +72,7 @@ func NewClient() (*Client, error) {
 			},
 		},
 		token:   strings.TrimSpace(string(tokenBytes)),
-		baseURL: k8sHost,
+		baseURL: k8sBaseURL(),
 	}, nil
 }
 
