@@ -10,7 +10,8 @@ ARG VERSION=dev
 WORKDIR /app
 COPY go.mod ./
 # No external dependencies – no need to download modules
-COPY . .
+COPY cmd cmd
+COPY internal internal
 
 RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
     go build -trimpath \
