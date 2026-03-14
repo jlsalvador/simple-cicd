@@ -117,7 +117,7 @@ type WorkflowWebhookRequest struct {
 	Kind       string                       `json:"kind,omitempty"`
 	Metadata   ObjectMeta                   `json:"metadata"`
 	Spec       WorkflowWebhookRequestSpec   `json:"spec"`
-	Status     WorkflowWebhookRequestStatus `json:"status,omitempty"`
+	Status     WorkflowWebhookRequestStatus `json:"status,omitzero"`
 }
 
 type WorkflowWebhookRequestList struct {
@@ -186,7 +186,7 @@ type Job struct {
 	APIVersion string     `json:"apiVersion,omitempty"`
 	Kind       string     `json:"kind,omitempty"`
 	Metadata   ObjectMeta `json:"metadata"`
-	Status     JobStatus  `json:"status,omitempty"`
+	Status     JobStatus  `json:"status,omitzero"`
 }
 
 type JobStatus struct {
