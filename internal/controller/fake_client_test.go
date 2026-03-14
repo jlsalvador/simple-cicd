@@ -6,6 +6,7 @@ package controller
 
 import (
 	"fmt"
+	"maps"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -246,9 +247,7 @@ func (f *fakeClient) GetJobRaw(namespace, name string) (map[string]any, error) {
 	}
 	// Return a shallow copy so tests can't accidentally mutate the template.
 	cp := make(map[string]any, len(raw))
-	for k, v := range raw {
-		cp[k] = v
-	}
+	maps.Copy(cp, raw)
 	return cp, nil
 }
 
