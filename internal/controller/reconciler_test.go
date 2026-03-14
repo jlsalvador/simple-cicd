@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -764,14 +765,9 @@ func TestGenerateSecretName(t *testing.T) {
 	if len(name) > 253 {
 		t.Errorf("secret name exceeds 253 chars: %d", len(name))
 	}
-	// Should contain the fixed infix
-	const infix = "-request-"
-	for i := range name {
-		if i+len(infix) <= len(name) && name[i:i+len(infix)] == infix {
-			return
-		}
+	if !strings.Contains(name, "-request-") {
+		t.Errorf("secret name %q does not contain %q", name, "-request-")
 	}
-	t.Errorf("secret name %q does not contain %q", name, infix)
 }
 
 func TestGenerateSecretName_LongWWRName(t *testing.T) {
