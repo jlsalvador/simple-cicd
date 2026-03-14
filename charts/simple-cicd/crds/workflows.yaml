@@ -28,7 +28,7 @@ spec:
       name: Next
       type: string
       priority: 1
-    name: v1alpha1
+    name: v1alpha2
     schema:
       openAPIV3Schema:
         description: >

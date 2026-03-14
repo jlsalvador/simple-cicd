@@ -7,7 +7,7 @@ const (
 	RequestSecretMountPath = "/var/run/secrets/kubernetes.io/request"
 
 	APIGroup   = "simple-cicd.jlsalvador.online"
-	APIVersion = "v1alpha1"
+	APIVersion = "v1alpha2"
 
 	// FinalizerCleanup is added to every WWR so the reconciler can explicitly
 	// delete cross-namespace jobs before the WWR itself is removed.

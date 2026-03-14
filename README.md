@@ -116,7 +116,7 @@ sequenceDiagram
 Defines which Jobs to clone and which Workflows to trigger next based on exit status. All referenced Jobs must be in the same namespace as the Workflow.
 
 ```yaml
-apiVersion: simple-cicd.jlsalvador.online/v1alpha1
+apiVersion: simple-cicd.jlsalvador.online/v1alpha2
 kind: Workflow
 metadata:
   name: my-workflow
@@ -135,7 +135,7 @@ spec:
 Binds an HTTP path to one or more Workflows and controls concurrency.
 
 ```yaml
-apiVersion: simple-cicd.jlsalvador.online/v1alpha1
+apiVersion: simple-cicd.jlsalvador.online/v1alpha2
 kind: WorkflowWebhook
 metadata:
   name: my-webhook
@@ -254,7 +254,7 @@ spec:
       restartPolicy: Never
 ---
 # Workflow triggered on failure: runs job-example-error
-apiVersion: simple-cicd.jlsalvador.online/v1alpha1
+apiVersion: simple-cicd.jlsalvador.online/v1alpha2
 kind: Workflow
 metadata:
   name: workflow-example-on-failure
@@ -264,7 +264,7 @@ spec:
     - name: job-example-error
 ---
 # Main workflow: runs job-example-random-exit, then workflow-example-on-failure on any failure
-apiVersion: simple-cicd.jlsalvador.online/v1alpha1
+apiVersion: simple-cicd.jlsalvador.online/v1alpha2
 kind: Workflow
 metadata:
   name: workflow-example
@@ -277,7 +277,7 @@ spec:
       when: OnAnyFailure
 ---
 # WorkflowWebhook: listens on /simple-cicd/workflowwebhook-example
-apiVersion: simple-cicd.jlsalvador.online/v1alpha1
+apiVersion: simple-cicd.jlsalvador.online/v1alpha2
 kind: WorkflowWebhook
 metadata:
   name: workflowwebhook-example

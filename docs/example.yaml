@@ -54,7 +54,7 @@ spec:
       restartPolicy: Never # Do not re-run the pod if something fails
 ---
 # Workflow that will clones the "job-example-error" Job
-apiVersion: simple-cicd.jlsalvador.online/v1alpha1
+apiVersion: simple-cicd.jlsalvador.online/v1alpha2
 kind: Workflow
 metadata:
   name: workflow-example-some-failures
@@ -66,7 +66,7 @@ spec:
 ---
 # Workflow that will clones the "job-example-random-exit" Job and
 # triggers the "workflow-example-some-failures" Workflow on any Job failure
-apiVersion: simple-cicd.jlsalvador.online/v1alpha1
+apiVersion: simple-cicd.jlsalvador.online/v1alpha2
 kind: Workflow
 metadata:
   name: workflow-example
@@ -80,7 +80,7 @@ spec:
       when: OnAnyFailure # Only run this Workflow if some of the jobsToBeCloned fails
 ---
 # WorkflowWebhook set the simple-cicd operator to listen for requests on the path "$namespace/$name"
-apiVersion: simple-cicd.jlsalvador.online/v1alpha1
+apiVersion: simple-cicd.jlsalvador.online/v1alpha2
 kind: WorkflowWebhook
 metadata:
   name: workflowwebhook-example
