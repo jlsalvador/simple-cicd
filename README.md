@@ -173,7 +173,7 @@ Created automatically by the operator on each incoming HTTP request. Tracks the 
 kubectl get wwr -n simple-cicd -o wide
 ```
 
-```
+```sh
 NAME                        DONE    STEPS   SUCCESSFUL JOBS   FAILED JOBS   CURRENT JOBS
 my-webhook-a1b2c3   true    2       1                 1             []
 my-webhook-d4e5f6   false   1       0                 0             [{"name":"my-job-xk9qz"}]
@@ -186,7 +186,7 @@ my-webhook-d4e5f6   false   1       0                 0             [{"name":"my
 Every Job cloned by the operator has the original HTTP request data mounted as read-only files at `/var/run/secrets/kubernetes.io/request/` inside all containers:
 
 | File | Content |
-|------|---------|
+| ---- | ------- |
 | `body` | Request body |
 | `headers` | All headers serialised as JSON |
 | `host` | Host header value |
@@ -338,6 +338,7 @@ curl -XPOST http://simple-cicd.simple-cicd:9000/simple-cicd/workflowwebhook-exam
 
 The motivation behind Simple CI/CD arises from the need for a tool that runs Jobs inside Kubernetes using webhooks, without requiring virtual machines, Docker-in-Docker, or components outside the Kubernetes ecosystem. Existing solutions either impose excessive requirements or fail to meet those expectations.
 
+<!-- markdownlint-configure-file { "MD033": { "allowed_elements": ["table", "caption", "thead", "tbody", "tr", "th", "td", "ul", "li", "a"] } } -->
 <table>
   <caption>Disclaimer: based on personal opinion. Please do your own research.</caption>
   <thead>
