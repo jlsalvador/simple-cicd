@@ -338,7 +338,7 @@ curl -XPOST http://simple-cicd.simple-cicd:9000/simple-cicd/workflowwebhook-exam
 
 The motivation behind Simple CI/CD arises from the need for a tool that runs Jobs inside Kubernetes using webhooks, without requiring virtual machines, Docker-in-Docker, or components outside the Kubernetes ecosystem. Existing solutions either impose excessive requirements or fail to meet those expectations.
 
-<!-- markdownlint-configure-file { "MD033": { "allowed_elements": ["table", "caption", "thead", "tbody", "tr", "th", "td", "ul", "li", "a"] } } -->
+<!-- markdownlint-disable MD033 -->
 <table>
   <caption>Disclaimer: based on personal opinion. Please do your own research.</caption>
   <thead>
@@ -435,6 +435,7 @@ The motivation behind Simple CI/CD arises from the need for a tool that runs Job
     </tr>
   </tbody>
 </table>
+<!-- markdownlint-enable MD033 -->
 
 ---
 
