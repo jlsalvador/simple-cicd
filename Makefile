@@ -1,7 +1,3 @@
-# ============================================================================
-# simple-cicd Makefile
-# ============================================================================
-
 IMAGE_REGISTRY  ?= ghcr.io/jlsalvador
 IMAGE_NAME      ?= simple-cicd
 # IMAGE_TAG defaults to the git-derived version; override as needed
@@ -20,23 +16,75 @@ GOFLAGS         ?= -trimpath -ldflags="$(LDFLAGS)"
 PLATFORMS       ?= linux/amd64,linux/arm64,linux/ppc64le,linux/s390x
 BUILDX_BUILDER  ?= simple-cicd-builder
 
-# ============================================================================
-# Build
-# ============================================================================
+## Location to install dependencies to
+LOCALBIN ?= $(shell pwd)/bin
+$(LOCALBIN):
+	mkdir -p $(LOCALBIN)
+	
+## Tool Binaries
+GOCYCLO ?= $(LOCALBIN)/gocyclo
+MISSPELL ?= $(LOCALBIN)/misspell
+
+## Tool Versions
+GOCYCLO_VERSION ?= latest
+MISSPELL_VERSION ?= latest
+
+$(GOCYCLO): $(LOCALBIN)
+	test -s $(LOCALBIN)/gocyclo || GOBIN=$(LOCALBIN) go install github.com/fzipp/gocyclo/cmd/gocyclo@$(GOCYCLO_VERSION)
+
+$(MISSPELL): $(LOCALBIN)
+	test -s $(LOCALBIN)/misspell || GOBIN=$(LOCALBIN) go install github.com/client9/misspell/cmd/misspell@$(MISSPELL_VERSION)
+
+##@ General
+
+# The help target prints out all targets with their descriptions organized
+# beneath their categories. The categories are represented by '##@' and the
+# target descriptions by '##'. The awk command is responsible for reading the
+# entire set of makefiles included in this invocation, looking for lines of the
+# file as xyz: ## something, and then pretty-format the target and help. Then,
+# if there's a line with ##@ something, that gets pretty-printed as a category.
+# More info on the usage of ANSI control characters for terminal formatting:
+# https://en.wikipedia.org/wiki/ANSI_escape_code#SGR_parameters
+# More info on the awk command:
+# http://linuxcommand.org/lc3_adv_awk.php
+
+.PHONY: help
+help: ## Display this help.
+	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n"} /^[a-zA-Z_0-9-]+:.*?##/ { printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
+
+##@ Build
+
+.PHONY: _mkdir_build
+_mkdir_build:
+	mkdir -p bin
 
 .PHONY: build
-build: ## Build the operator binary for the host platform
-	CGO_ENABLED=0 go build $(GOFLAGS) -o bin/simple-cicd ./cmd/simple-cicd
+build: _mkdir_build ## Build the operator binary for the host platform
+	CGO_ENABLED=0 go build $(GOFLAGS) -o bin/simple-cicd-operator ./cmd/operator
 
 .PHONY: build-all
-build-all: ## Cross-compile binaries for all supported platforms
+build-all: _mkdir_build ## Cross-compile binaries for all supported platforms
 	$(foreach platform,\
 		linux/amd64 linux/arm64 linux/ppc64le linux/s390x,\
 		$(eval OS   := $(word 1,$(subst /, ,$(platform))))\
 		$(eval ARCH := $(word 2,$(subst /, ,$(platform))))\
 		CGO_ENABLED=0 GOOS=$(OS) GOARCH=$(ARCH) \
 			go build $(GOFLAGS) \
-			-o bin/simple-cicd-$(OS)-$(ARCH) ./cmd/simple-cicd ;)
+			-o bin/simple-cicd-operator-$(OS)-$(ARCH) ./cmd/operator ;)
+
+##@ Test
+
+.PHONY: test-cyclo
+test-cyclo: $(GOCYCLO) ## Run gocyclo against code.
+	$(GOCYCLO) -over 15 .
+
+.PHONY: test-misspell
+test-misspell: $(MISSPELL) ## Run misspell against code.
+	$(MISSPELL) -error .github cmd docs internal pkg LICENSE Makefile README.md
+
+.PHONY: test-go
+test-go: ## Test code.
+	go test -race -count=1 -cover ./...
 
 .PHONY: fmt
 fmt: ## Run go fmt
@@ -47,15 +95,10 @@ vet: ## Run go vet
 	go vet ./...
 
 .PHONY: test
-test: ## Run all tests
-	go test -race -count=1 ./...
+test: test-cyclo test-misspell test-go ## Run all tests
 
 .PHONY: check
 check: fmt vet test ## Run fmt + vet + test
-
-.PHONY: _mkdir_build
-_mkdir_build:
-	mkdir -p bin
 
 bin/cover.out: _mkdir_build
 	go test \
@@ -73,9 +116,7 @@ bin/cover.html: bin/cover.out
 cover: bin/cover.txt bin/cover.html ## Generate coverage reports.
 	@echo "total: "$(shell grep "total:" bin/cover.txt | awk '{print $$3}')
 
-# ============================================================================
-# Docker - multi-platform via buildx
-# ============================================================================
+##@ Container
 
 .PHONY: docker-builder-create
 docker-builder-create: ## Create (once) the buildx builder with multi-platform support
@@ -89,6 +130,7 @@ docker-builder-create: ## Create (once) the buildx builder with multi-platform s
 .PHONY: docker-build
 docker-build: docker-builder-create ## Build multi-platform image (local cache only, no push)
 	docker buildx build \
+		-f Dockerfile.operator
 		--builder $(BUILDX_BUILDER) \
 		--platform $(PLATFORMS) \
 		--build-arg VERSION=$(VERSION) \
@@ -98,6 +140,7 @@ docker-build: docker-builder-create ## Build multi-platform image (local cache o
 .PHONY: docker-push
 docker-push: docker-builder-create ## Build and push multi-platform image to the registry
 	docker buildx build \
+		-f Dockerfile.operator
 		--builder $(BUILDX_BUILDER) \
 		--platform $(PLATFORMS) \
 		--build-arg VERSION=$(VERSION) \
@@ -105,69 +148,13 @@ docker-push: docker-builder-create ## Build and push multi-platform image to the
 		--push \
 		.
 
-.PHONY: docker-build-push
-docker-build-push: docker-push ## Alias for docker-push (build + push in one step)
-
 .PHONY: docker-builder-rm
 docker-builder-rm: ## Remove the buildx builder
 	docker buildx rm $(BUILDX_BUILDER) 2>/dev/null || true
 
-# ============================================================================
-# Deploy
-# ============================================================================
+##@ Helm
 
-.PHONY: namespace
-namespace: ## Create the operator namespace (idempotent)
-	kubectl create namespace $(NAMESPACE) --dry-run=client -o yaml | kubectl apply -f -
-
-.PHONY: install-crds
-install-crds: ## Install (or upgrade) the three CRDs into the cluster
-	kubectl apply -f deploy/crds/workflows.yaml
-	kubectl apply -f deploy/crds/workflowwebhooks.yaml
-	kubectl apply -f deploy/crds/workflowwebhookrequests.yaml
-	kubectl wait --for condition=established --timeout=30s \
-		crd/workflows.simple-cicd.jlsalvador.online \
-		crd/workflowwebhooks.simple-cicd.jlsalvador.online \
-		crd/workflowwebhookrequests.simple-cicd.jlsalvador.online
-
-.PHONY: uninstall-crds
-uninstall-crds: ## Remove the three CRDs (WARNING: also deletes ALL custom resources!)
-	kubectl delete -f deploy/crds/ --ignore-not-found
-
-.PHONY: deploy
-deploy: namespace install-crds ## Apply CRDs + all operator manifests
-	kubectl apply -f deploy/serviceaccount.yaml
-	kubectl apply -f deploy/clusterrole.yaml
-	kubectl apply -f deploy/clusterrolebinding.yaml
-	kubectl apply -f deploy/deployment.yaml
-	kubectl apply -f deploy/service.yaml
-
-.PHONY: undeploy
-undeploy: ## Remove all operator manifests (does NOT delete CRDs)
-	kubectl delete -f deploy/service.yaml         --ignore-not-found
-	kubectl delete -f deploy/deployment.yaml      --ignore-not-found
-	kubectl delete -f deploy/clusterrolebinding.yaml --ignore-not-found
-	kubectl delete -f deploy/clusterrole.yaml     --ignore-not-found
-	kubectl delete -f deploy/serviceaccount.yaml  --ignore-not-found
-
-.PHONY: restart
-restart: ## Roll out a fresh deployment (pulls the latest image)
-	kubectl rollout restart deployment/simple-cicd -n $(NAMESPACE)
-
-.PHONY: status
-status: ## Show rollout status
-	kubectl rollout status deployment/simple-cicd -n $(NAMESPACE)
-
-.PHONY: logs
-logs: ## Tail operator logs
-	kubectl logs -n $(NAMESPACE) -l app=simple-cicd --follow
-
-
-# ============================================================================
-# Helm
-# ============================================================================
-
-CHART_DIR       ?= charts/simple-cicd
+CHART_DIR       ?= charts/simple-cicd-operator
 HELM_RELEASE    ?= simple-cicd
 HELM_NAMESPACE  ?= $(NAMESPACE)
 
@@ -202,8 +189,7 @@ helm-uninstall: ## Uninstall the chart release (does NOT delete CRDs)
 	helm uninstall $(HELM_RELEASE) --namespace $(HELM_NAMESPACE)
 
 .PHONY: helm-manifests
-helm-manifests: ## Render chart into a single install.yaml (kubectl apply -f install.yaml)
-	@mkdir -p bin
+helm-manifests: _mkdir_build ## Render chart into a single install.yaml (kubectl apply -f install.yaml)
 	helm template $(HELM_RELEASE) $(CHART_DIR) \
 		--namespace $(HELM_NAMESPACE) \
 		--set image.repository=$(IMAGE_REGISTRY)/$(IMAGE_NAME) \
@@ -213,30 +199,48 @@ helm-manifests: ## Render chart into a single install.yaml (kubectl apply -f ins
 	@echo "Generated bin/install.yaml"
 
 .PHONY: helm-package
-helm-package: ## Package the chart into a .tgz in bin/
-	@mkdir -p bin
+helm-package: _mkdir_build ## Package the chart into a .tgz in bin/
 	helm package $(CHART_DIR) --destination bin/
 
-# ============================================================================
-# Run locally (outside the cluster - requires a valid kubeconfig)
-# ============================================================================
+##@ Deploy
 
 .PHONY: run
 run: ## Run the operator locally using KUBECONFIG
 	@echo "NOTE: override K8S_HOST and SA_DIR if running outside the cluster"
-	go run ./cmd/simple-cicd
+	go run ./cmd/operator
 
-# ============================================================================
-# Misc
-# ============================================================================
+.PHONY: namespace
+namespace: ## Create the operator namespace (idempotent)
+	kubectl create namespace $(NAMESPACE) --dry-run=client -o yaml | kubectl apply -f -
+
+.PHONY: install-crds
+install-crds: ## Install (or upgrade) the three CRDs into the cluster
+	kubectl apply -f $(CHART_DIR)/crds/workflows.yaml
+	kubectl apply -f $(CHART_DIR)/crds/workflowwebhooks.yaml
+	kubectl apply -f $(CHART_DIR)/crds/workflowwebhookrequests.yaml
+	kubectl wait --for condition=established --timeout=30s \
+		crd/workflows.simple-cicd.jlsalvador.online \
+		crd/workflowwebhooks.simple-cicd.jlsalvador.online \
+		crd/workflowwebhookrequests.simple-cicd.jlsalvador.online
+
+.PHONY: uninstall-crds
+uninstall-crds: ## Remove the CRDs
+	kubectl delete -f $(CHART_DIR)/crds/ --ignore-not-found
+
+.PHONY: restart
+restart: ## Roll out a fresh deployment (pulls the latest image)
+	kubectl -n $(NAMESPACE) rollout restart deployment/$(HELM_RELEASE)
+
+.PHONY: status
+status: ## Show rollout status
+	kubectl -n $(NAMESPACE) rollout status deployment/$(HELM_RELEASE)
+
+.PHONY: logs
+logs: ## Tail operator logs
+	kubectl -n $(NAMESPACE) logs -l app.kubernetes.io/name=$(HELM_RELEASE) --follow
+
+##@ Cleaning
 
 .PHONY: clean
 clean: ## Remove build artefacts
 	rm -rf bin/
-
-.PHONY: help
-help: ## Show this help
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
-		| awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-22s\033[0m %s\n", $$1, $$2}'
-
-.DEFAULT_GOAL := help
