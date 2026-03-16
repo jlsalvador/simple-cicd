@@ -1,5 +1,5 @@
 apiVersion: v2
-name: simple-cicd
+name: simple-cicd-operator
 description: A lightweight Kubernetes-native CI/CD operator driven by webhooks and workflows.
 type: application
 # Chart version and appVersion are kept in sync with the git tag.
