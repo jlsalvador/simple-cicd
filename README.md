@@ -56,8 +56,8 @@ The operator exposes an HTTP server on port `9000`. Each incoming request to `/{
 ```mermaid
 flowchart TD
     A["HTTP POST /{namespace}/{webhookName}"]
-    A --> B[WorkflowWebhookRequest]
     A --> C[Request Secret]
+    A --> B[WorkflowWebhookRequest]
 
     B -->|reads| D[WorkflowWebhook]
     D --> E[Workflow]
@@ -71,8 +71,8 @@ flowchart TD
 
     H --> J{more Workflows?}
     I --> J
-    J -->|yes| E
     J -->|no| K([WorkflowWebhookRequest done])
+    J -->|yes| E
 ```
 
 ### Reconciliation loop
