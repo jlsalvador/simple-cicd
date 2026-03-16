@@ -16,11 +16,11 @@ COPY internal internal
 RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
     go build -trimpath \
     -ldflags="-s -w -X github.com/jlsalvador/simple-cicd/internal/version.Version=${VERSION}" \
-    -o simple-cicd ./cmd/simple-cicd
+    -o simple-cicd-operator ./cmd/operator
 
 # Runtime stage – scratch works for all architectures
 FROM scratch
 
-COPY --from=builder /app/simple-cicd /simple-cicd
+COPY --from=builder /app/simple-cicd-operator /simple-cicd-operator
 
-ENTRYPOINT ["/simple-cicd"]
+ENTRYPOINT ["/simple-cicd-operator"]
