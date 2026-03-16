@@ -358,9 +358,17 @@ func (c *Client) CreateJobRaw(namespace string, job map[string]any) (CreatedReso
 	if meta == nil {
 		return CreatedResource{}, fmt.Errorf("created job has no metadata")
 	}
+	name, _ := meta["name"].(string)
+	if name == "" {
+		return CreatedResource{}, fmt.Errorf("created job has no name in metadata")
+	}
+	uid, _ := meta["uid"].(string)
+	if uid == "" {
+		return CreatedResource{}, fmt.Errorf("created job has no uid in metadata")
+	}
 	return CreatedResource{
-		Name: meta["name"].(string),
-		UID:  meta["uid"].(string),
+		Name: name,
+		UID:  uid,
 	}, nil
 }
 

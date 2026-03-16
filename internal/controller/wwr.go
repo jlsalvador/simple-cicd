@@ -10,7 +10,7 @@ import (
 	"github.com/jlsalvador/simple-cicd/internal/types"
 )
 
-// initialize Initializes a brand-new WWR (Steps == 0) by fetching the
+// initialize sets up a brand-new WWR (Steps == 0) by fetching the
 // associated WorkflowWebhook and checking if it is suspended.
 // If it is, mark the WWR as done.
 // Otherwise, proceed to the next step.
@@ -177,7 +177,7 @@ func (r *Reconciler) collectNextWorkflows(
 	wwr *types.WorkflowWebhookRequest,
 	stepSucceeded, stepFailed int,
 ) ([]types.ResourceName, error) {
-	seen := make(map[string]bool)
+	seen := make(map[string]struct{})
 	var result []types.ResourceName
 
 	for _, wfRef := range wwr.Status.CurrentWorkflows {
@@ -204,8 +204,8 @@ func (r *Reconciler) collectNextWorkflows(
 			}
 
 			key := nextNamespace + "/" + next.Name
-			if !seen[key] {
-				seen[key] = true
+			if _, ok := seen[key]; !ok {
+				seen[key] = struct{}{}
 				result = append(result, types.ResourceName{
 					Name:      next.Name,
 					Namespace: nextNamespace,
@@ -272,58 +272,59 @@ func (r *Reconciler) cloneJobsForWorkflow(
 
 	for _, jobRef := range workflow.Spec.JobsToBeCloned {
 		// Resolve the namespace where the template job lives.
-		srcNamespace := jobRef.Namespace
-		if srcNamespace == "" {
-			srcNamespace = wfNamespace
+		namespace := jobRef.Namespace
+		if namespace == "" {
+			namespace = wfNamespace
 		}
 
-		raw, err := r.client.GetJobRaw(srcNamespace, jobRef.Name)
+		raw, err := r.client.GetJobRaw(namespace, jobRef.Name)
 		if err != nil {
-			log.Printf("[reconciler] error fetching job %s/%s for cloning: %v", srcNamespace, jobRef.Name, err)
+			log.Printf("[reconciler] error fetching job %s/%s for cloning: %v", namespace, jobRef.Name, err)
 			continue
 		}
-
-		targetNamespace := srcNamespace
 
 		// Step 1: choose the secret name upfront so we can reference it in
 		// the job manifest before the secret actually exists.
 		secretName := generateSecretName(wwr.Metadata.Name)
 
 		// Step 2: create the job with the secret volume already declared.
+		//
 		// The ownerReference to the WWR is only set when the job is in the
 		// same namespace: Kubernetes GC silently deletes dependents whose
 		// cross-namespace ownerReferences cannot be resolved, which would
-		// cause jobs to vanish shortly after creation. Cross-namespace job
-		// cleanup is handled exclusively by the finalizer on the WWR.
-		sameNamespace := targetNamespace == wwr.Metadata.Namespace
+		// cause jobs to vanish shortly after creation.
+		//
+		// Cross-namespace job cleanup is handled exclusively by the finalizer
+		// on the WWR.
+		sameNamespace := namespace == wwr.Metadata.Namespace
 		cloned := prepareJobForCloning(raw, wwr, secretName, sameNamespace)
 
-		created, err := r.client.CreateJobRaw(targetNamespace, cloned)
+		created, err := r.client.CreateJobRaw(namespace, cloned)
 		if err != nil {
-			return nil, fmt.Errorf("creating cloned job %s/%s: %w", targetNamespace, jobRef.Name, err)
+			return nil, fmt.Errorf("creating cloned job %s/%s: %w", namespace, jobRef.Name, err)
 		}
 		log.Printf("[reconciler] cloned job %s/%s -> %s/%s (for %s/%s)",
-			srcNamespace, jobRef.Name, targetNamespace, created.Name,
+			namespace, jobRef.Name, namespace, created.Name,
 			wwr.Metadata.Namespace, wwr.Metadata.Name)
 
 		// Step 3: create the secret, owned by the job from the start.
 		// Kubernetes GC will delete it when the job is removed (same-namespace).
 		if err := r.client.CreateSecretForJob(
-			targetNamespace, secretName, wwr.Spec.Request,
+			namespace, secretName, wwr.Spec.Request,
 			created.Name, created.UID,
 		); err != nil {
 			// The job is already running; log and continue rather than failing
 			// the whole step, to avoid leaving partially-created state.
 			log.Printf("[reconciler] warning: created job %s/%s but failed to create its request secret %s/%s: %v",
-				targetNamespace, created.Name, targetNamespace, secretName, err)
+				namespace, created.Name, namespace, secretName, err)
 		} else {
 			log.Printf("[reconciler] created request secret %s/%s (owned by job %s)",
-				targetNamespace, secretName, created.Name)
+				namespace, secretName, created.Name)
 		}
 
 		result = append(result, types.ResourceName{
 			Name:      created.Name,
-			Namespace: targetNamespace,
+			Namespace: namespace,
 		})
 	}
 	return result, nil
@@ -361,7 +362,7 @@ func (r *Reconciler) markDone(wwr *types.WorkflowWebhookRequest, reason, message
 	now := time.Now().UTC()
 	wwr.Status.CompletionTime = &now
 	wwr.Status.Conditions = append(wwr.Status.Conditions, types.Condition{
-		LastTransitionTime: time.Now().UTC(),
+		LastTransitionTime: now,
 		Message:            message,
 		Reason:             reason,
 		Status:             "True",
