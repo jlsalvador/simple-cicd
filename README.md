@@ -7,17 +7,6 @@
 No dependencies, no virtual machines, no Docker-in-Docker, no need to learn a
 new language or framework.
 
-## Table of Contents
-
-1. [Getting Started](#getting-started)
-2. [How It Works](#how-it-works)
-3. [Custom Resources](#custom-resources)
-4. [Request Data in Jobs](#request-data-in-jobs)
-5. [Example](#example)
-6. [Motivation](#motivation)
-7. [Contributing](#contributing)
-8. [License](#license)
-
 ---
 
 ## Getting Started
@@ -36,16 +25,6 @@ helm upgrade --install \
 
 ```sh
 kubectl apply -f https://github.com/jlsalvador/simple-cicd/releases/latest/download/operator.yaml
-```
-
-### Install from source
-
-```sh
-# Install CRDs
-make install-crds
-
-# Deploy the operator
-make deploy
 ```
 
 ---
@@ -124,17 +103,18 @@ sequenceDiagram
 ### Workflow
 
 Defines which Jobs to clone and which Workflows to trigger next based on exit
-status. All referenced Jobs must be in the same namespace as the Workflow.
+status.
 
 ```yaml
 apiVersion: simple-cicd.jlsalvador.online/v1alpha2
 kind: Workflow
 metadata:
   name: my-workflow
-  namespace: simple-cicd
+  namespace: example
 spec:
   jobsToBeCloned:
-    - name: my-job # Must be in the same namespace
+    - name: my-job
+      namespace: example # The same as the Workflow's namespace by default.
   next:
     - name: my-next-workflow
       when: OnAnyFailure # OnSuccess | OnAnySuccess | OnFailure | OnAnyFailure | Always
@@ -150,10 +130,11 @@ apiVersion: simple-cicd.jlsalvador.online/v1alpha2
 kind: WorkflowWebhook
 metadata:
   name: my-webhook
-  namespace: simple-cicd
+  namespace: example
 spec:
   workflows:
     - name: my-workflow
+      namespace: example # The same as the WorkflowWebhook's namespace by default.
   concurrencyPolicy: Allow # Allow | Forbid | Replace
   suspend: false
 ```
@@ -216,14 +197,14 @@ failure it triggers a second Workflow that echoes the original HTTP request
 details.
 
 ```yaml
-# Job that randomly exits with code 0 or 1
+# Job that randomly exits with code 0 or 1.
 apiVersion: batch/v1
 kind: Job
 metadata:
   name: job-example-random-exit
-  namespace: simple-cicd
+  namespace: example
 spec:
-  suspend: true # Prevents Kubernetes from running this directly
+  suspend: true # Prevents Kubernetes from running this directly.
   backoffLimit: 0
   template:
     spec:
@@ -245,14 +226,14 @@ spec:
               echo "At:        $(cat /var/run/secrets/kubernetes.io/request/timestamp)"
               echo "UserAgent: $(cat /var/run/secrets/kubernetes.io/request/userAgent)"
               echo "Body:      $(cat /var/run/secrets/kubernetes.io/request/body)"
-      restartPolicy: Never
+      restartPolicy: Never # Do not re-run the pod if something fails.
 ---
-# Job that echoes the original HTTP request
+# Job that echoes "ERROR".
 apiVersion: batch/v1
 kind: Job
 metadata:
   name: job-example-error
-  namespace: simple-cicd
+  namespace: example
 spec:
   suspend: true
   template:
@@ -261,24 +242,23 @@ spec:
         - name: error
           image: bash
           command: ["echo", "ERROR"]
-      restartPolicy: Never
 ---
-# Workflow triggered on failure: runs job-example-error
+# Workflow triggered on failure: runs job-example-error.
 apiVersion: simple-cicd.jlsalvador.online/v1alpha2
 kind: Workflow
 metadata:
   name: workflow-example-on-failure
-  namespace: simple-cicd
+  namespace: example
 spec:
   jobsToBeCloned:
     - name: job-example-error
 ---
-# Main workflow: runs job-example-random-exit, then workflow-example-on-failure on any failure
+# Main workflow: runs job-example-random-exit, then workflow-example-on-failure on any failure.
 apiVersion: simple-cicd.jlsalvador.online/v1alpha2
 kind: Workflow
 metadata:
   name: workflow-example
-  namespace: simple-cicd
+  namespace: example
 spec:
   jobsToBeCloned:
     - name: job-example-random-exit
@@ -286,12 +266,12 @@ spec:
     - name: workflow-example-on-failure
       when: OnAnyFailure
 ---
-# WorkflowWebhook: listens on /simple-cicd/workflowwebhook-example
+# WorkflowWebhook: listens on /example/workflowwebhook-example.
 apiVersion: simple-cicd.jlsalvador.online/v1alpha2
 kind: WorkflowWebhook
 metadata:
   name: workflowwebhook-example
-  namespace: simple-cicd
+  namespace: example
 spec:
   workflows:
     - name: workflow-example
@@ -302,14 +282,14 @@ through `kubectl port-forward`.
 
 ```sh
 kubectl -n simple-cicd port-forward svc/operator 9000:9000 &
-curl -XPOST http://localhost:9000/simple-cicd/workflowwebhook-example
+curl -XPOST http://localhost:9000/example/workflowwebhook-example
 ```
 
 You could also trigger the WorkflowWebhook directly requesting it to the
 operator service, inside the cluster, or through LoadBalancer service.
 
 ```yaml
-# Optional: Secret for basic-auth on the Ingress
+# Secret for basic-auth for the Ingress.
 apiVersion: v1
 kind: Secret
 metadata:
@@ -321,11 +301,11 @@ stringData:
     # user:pass
     user:$apr1$j.P.ucaS$hHtkMN19glS9.ffLns2Eh/
 ---
-# Optional: Ingress to expose the webhook externally
+# Ingress to expose the operator service externally.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: simple-cicd-ingress
+  name: ingress
   namespace: simple-cicd
   annotations:
     nginx.ingress.kubernetes.io/auth-type: basic
@@ -336,7 +316,7 @@ spec:
     - host: example.org
       http:
         paths:
-          - path: /simple-cicd/workflowwebhook-example
+          - path: /example/workflowwebhook-example
             pathType: Prefix
             backend:
               service:
@@ -349,18 +329,21 @@ Trigger it:
 
 ```sh
 # From outside the cluster
-curl -u user:pass -XPOST http://example.org/simple-cicd/workflowwebhook-example
+curl -u user:pass -XPOST http://example.org/example/workflowwebhook-example
 
 # From inside the cluster
-curl -XPOST http://operator.simple-cicd:9000/simple-cicd/workflowwebhook-example
+curl -XPOST http://operator.simple-cicd:9000/example/workflowwebhook-example
 ```
 
 ---
 
 ## Motivation
 
-Existing solutions either impose excessive requirements or requires virtual
+Existing solutions either impose excessive requirements or require virtual
 machines, Docker-in-Docker, or components outside the Kubernetes ecosystem.
+
+Simple CI/CD uses native Kubernetes Jobs, so you do not need to learn a new
+language.
 
 <!-- markdownlint-disable MD033 -->
 <table>
