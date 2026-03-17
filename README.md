@@ -175,7 +175,8 @@ my-webhook-d4e5f6   false   1       0                 0             [{"name":"my
 ## Request Data in Jobs
 
 Every Job cloned by the operator has the original HTTP request data mounted as
-read-only files at `/var/run/secrets/kubernetes.io/request/` inside all pods:
+read-only files at `/var/run/secrets/kubernetes.io/request/` inside all its
+containers:
 
 | File         | Content                                        |
 | ------------ | ---------------------------------------------- |
