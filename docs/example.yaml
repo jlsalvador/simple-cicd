@@ -23,6 +23,21 @@ spec:
         - name: random-exit
           image: bash
           command: ["sh", "-c", "exit $$(($RANDOM % 2))"] # Sometimes will fails
+        - name: echo-request
+          image: bash
+          command:
+            # Simple CI/CD will mounts the next request payloads inside all Pods
+            - sh
+            - -c
+            - |
+              echo "Host:      $(cat /var/run/secrets/kubernetes.io/request/host)"
+              echo "Headers:   $(cat /var/run/secrets/kubernetes.io/request/headers)"
+              echo "Method:    $(cat /var/run/secrets/kubernetes.io/request/method)"
+              echo "URL:       $(cat /var/run/secrets/kubernetes.io/request/url)"
+              echo "From:      $(cat /var/run/secrets/kubernetes.io/request/remoteAddr)"
+              echo "At:        $(cat /var/run/secrets/kubernetes.io/request/timestamp)"
+              echo "UserAgent: $(cat /var/run/secrets/kubernetes.io/request/userAgent)"
+              echo "Body:      $(cat /var/run/secrets/kubernetes.io/request/body)"
       restartPolicy: Never # Do not re-run the pod if something fails
 ---
 # Job that echoes "ERROR"
@@ -39,18 +54,6 @@ spec:
         - name: error
           image: bash
           command: ["echo", "ERROR"]
-        - name: echo-request
-          image: bash
-          command:
-            - cat # Simple CI/CD will mounts the next request payloads inside all Pods
-            - /var/run/secrets/kubernetes.io/request/body
-            - /var/run/secrets/kubernetes.io/request/headers
-            - /var/run/secrets/kubernetes.io/request/host
-            - /var/run/secrets/kubernetes.io/request/method
-            - /var/run/secrets/kubernetes.io/request/url
-            - /var/run/secrets/kubernetes.io/request/remoteAddr
-            - /var/run/secrets/kubernetes.io/request/timestamp
-            - /var/run/secrets/kubernetes.io/request/userAgent
       restartPolicy: Never # Do not re-run the pod if something fails
 ---
 # Workflow that will clones the "job-example-error" Job

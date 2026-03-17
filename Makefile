@@ -154,8 +154,8 @@ docker-builder-rm: ## Remove the buildx builder
 
 ##@ Helm
 
-CHART_DIR       ?= charts/simple-cicd-operator
-HELM_RELEASE    ?= simple-cicd
+CHART_DIR       ?= charts/operator
+HELM_RELEASE    ?= operator
 HELM_NAMESPACE  ?= $(NAMESPACE)
 
 .PHONY: helm-lint
@@ -189,14 +189,14 @@ helm-uninstall: ## Uninstall the chart release (does NOT delete CRDs)
 	helm uninstall $(HELM_RELEASE) --namespace $(HELM_NAMESPACE)
 
 .PHONY: helm-manifests
-helm-manifests: _mkdir_build ## Render chart into a single install.yaml (kubectl apply -f install.yaml)
+helm-manifests: _mkdir_build ## Render chart into a single operator.yaml (kubectl apply -f operator.yaml)
 	helm template $(HELM_RELEASE) $(CHART_DIR) \
 		--namespace $(HELM_NAMESPACE) \
 		--set image.repository=$(IMAGE_REGISTRY)/$(IMAGE_NAME) \
 		--set image.tag=$(VERSION) \
 		--include-crds \
-		> bin/install.yaml
-	@echo "Generated bin/install.yaml"
+		> bin/operator.yaml
+	@echo "Generated bin/operator.yaml"
 
 .PHONY: helm-package
 helm-package: _mkdir_build ## Package the chart into a .tgz in bin/

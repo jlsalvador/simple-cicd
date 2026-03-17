@@ -26,14 +26,14 @@ jobs:
       - name: Bump chart version and appVersion
         run: |
           VERSION=${{ steps.version.outputs.value }}
-          sed -i "s/^version:.*/version: ${VERSION}/" charts/simple-cicd/Chart.yaml
-          sed -i "s/^appVersion:.*/appVersion: \"v${VERSION}\"/" charts/simple-cicd/Chart.yaml
+          sed -i "s/^version:.*/version: ${VERSION}/" charts/operator/Chart.yaml
+          sed -i "s/^appVersion:.*/appVersion: \"v${VERSION}\"/" charts/operator/Chart.yaml
 
       - name: Install Helm
         uses: azure/setup-helm@v4
 
       - name: Lint chart
-        run: helm lint charts/simple-cicd
+        run: helm lint charts/operator
 
       - name: Configure Git for chart-releaser
         run: |
@@ -41,7 +41,7 @@ jobs:
           git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
 
       - name: Run chart-releaser
-        uses: helm/chart-releaser-action@v1.6.0
+        uses: helm/chart-releaser-action@v1.7.0
         with:
           charts_dir: charts
           # Skip uploading if the chart version already exists (idempotent).

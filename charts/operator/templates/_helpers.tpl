@@ -45,6 +45,8 @@ helm.sh/chart: {{ include "simple-cicd.chart" . }}
 app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
 {{- end }}
 app.kubernetes.io/managed-by: {{ .Release.Service }}
+app.kubernetes.io/component: operator
+app.kubernetes.io/part-of: simple-cicd
 {{- with .Values.extraLabels }}
 {{ toYaml . }}
 {{- end }}

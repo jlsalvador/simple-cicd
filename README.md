@@ -2,7 +2,10 @@
 
 ![Simple CI/CD Logo](docs/img/logo.png)
 
-A lightweight Kubernetes-native CI/CD operator that triggers Workflows via webhooks and orchestrates Jobs — with no external dependencies, no virtual machines, and no Docker-in-Docker.
+**Manage jobs, workflows, and webhooks natively via K8s APIs.**
+
+No dependencies, no virtual machines, no Docker-in-Docker, no need to learn a
+new language or framework.
 
 ## Table of Contents
 
@@ -26,13 +29,13 @@ helm upgrade --install \
   --create-namespace \
   --namespace simple-cicd \
   --repo https://jlsalvador.github.io/simple-cicd \
-  simple-cicd simple-cicd
+  operator operator
 ```
 
 ### Install via manifest
 
 ```sh
-kubectl apply -f https://github.com/jlsalvador/simple-cicd/releases/latest/download/install.yaml
+kubectl apply -f https://github.com/jlsalvador/simple-cicd/releases/latest/download/operator.yaml
 ```
 
 ### Install from source
@@ -49,9 +52,11 @@ make deploy
 
 ## How It Works
 
-Simple CI/CD follows the Kubernetes [Operator pattern](https://kubernetes.io/docs/concepts/extend-kubernetes/operator/).
+Simple CI/CD follows the Kubernetes [Operator pattern].
 
-The operator exposes an HTTP server on port `9000`. Each incoming request to `/{namespace}/{workflowWebhookName}` creates a `WorkflowWebhookRequest` and starts the reconciliation loop.
+The operator exposes an HTTP server on port `9000`. Each incoming request to
+`/{namespace}/{workflowWebhookName}` creates a `WorkflowWebhookRequest` and
+starts the reconciliation loop.
 
 ```mermaid
 flowchart TD
@@ -77,11 +82,16 @@ flowchart TD
 
 ### Reconciliation loop
 
-1. A webhook HTTP request arrives → the operator creates a `WorkflowWebhookRequest` (WWR) and a `Secret` containing the request data.
-2. The reconciler reads the WWR, resolves the referenced `WorkflowWebhook` and its `Workflow` list.
-3. For each active Workflow, referenced Jobs are cloned into the WWR namespace with the request Secret mounted.
-4. The reconciler polls cloned Jobs until all finish, then evaluates `when` conditions to determine which next Workflows to trigger.
-5. Steps 3–4 repeat until no further Workflows remain, at which point the WWR is marked `done: true`.
+1. A webhook HTTP request arrives → the operator creates a
+   `WorkflowWebhookRequest` (WWR) and a `Secret` containing the request data.
+2. The reconciler reads the WWR, resolves the referenced `WorkflowWebhook` and
+   its `Workflow` list.
+3. For each active Workflow, referenced Jobs are cloned into the WWR namespace
+   with the request Secret mounted.
+4. The reconciler polls cloned Jobs until all finish, then evaluates `when`
+   conditions to determine which next Workflows to trigger.
+5. Steps 3-4 repeat until no further Workflows remain, at which point the WWR
+   is marked `done: true`.
 
 ### Sequence diagram
 
@@ -113,7 +123,8 @@ sequenceDiagram
 
 ### Workflow
 
-Defines which Jobs to clone and which Workflows to trigger next based on exit status. All referenced Jobs must be in the same namespace as the Workflow.
+Defines which Jobs to clone and which Workflows to trigger next based on exit
+status. All referenced Jobs must be in the same namespace as the Workflow.
 
 ```yaml
 apiVersion: simple-cicd.jlsalvador.online/v1alpha2
@@ -123,11 +134,11 @@ metadata:
   namespace: simple-cicd
 spec:
   jobsToBeCloned:
-    - name: my-job          # Must be in the same namespace
+    - name: my-job # Must be in the same namespace
   next:
     - name: my-next-workflow
-      when: OnAnyFailure    # OnSuccess | OnAnySuccess | OnFailure | OnAnyFailure | Always
-  suspend: false            # Set to true to skip execution without deleting
+      when: OnAnyFailure # OnSuccess | OnAnySuccess | OnFailure | OnAnyFailure | Always
+  suspend: false # Set to true to skip execution without deleting
 ```
 
 ### WorkflowWebhook
@@ -143,37 +154,36 @@ metadata:
 spec:
   workflows:
     - name: my-workflow
-  concurrencyPolicy: Allow  # Allow | Forbid | Replace
+  concurrencyPolicy: Allow # Allow | Forbid | Replace
   suspend: false
 ```
 
 #### Concurrency policies
 
-| Policy | Behaviour |
-| ------ | --------- |
-| `Allow` | Multiple WWRs can run simultaneously (default) |
-| `Forbid` | Rejects new requests while a WWR is still running |
-| `Replace` | Deletes any running WWR and starts a fresh one |
+| Policy    | Behaviour                                         |
+| --------- | ------------------------------------------------- |
+| `Allow`   | Multiple WWRs can run simultaneously (default)    |
+| `Forbid`  | Rejects new requests while a WWR is still running |
+| `Replace` | Deletes any running WWR and starts a fresh one    |
 
 #### `when` conditions
 
-| Value | Trigger condition |
-| ----- | ----------------- |
-| `OnSuccess` | All Jobs in the step succeeded (default) |
-| `OnAnySuccess` | At least one Job succeeded |
-| `OnFailure` | All Jobs in the step failed |
-| `OnAnyFailure` | At least one Job failed |
-| `Always` | Always trigger regardless of outcome |
+| Value          | Trigger condition                        |
+| -------------- | ---------------------------------------- |
+| `OnSuccess`    | All Jobs in the step succeeded (default) |
+| `OnAnySuccess` | At least one Job succeeded               |
+| `OnFailure`    | All Jobs in the step failed              |
+| `OnAnyFailure` | At least one Job failed                  |
+| `Always`       | Always trigger regardless of outcome     |
 
 ### WorkflowWebhookRequest
 
-Created automatically by the operator on each incoming HTTP request. Tracks the full execution lifecycle.
+Created automatically by the operator on each incoming HTTP request. Tracks the
+full execution lifecycle.
 
 ```sh
 kubectl get wwr -n simple-cicd -o wide
-```
 
-```sh
 NAME                        DONE    STEPS   SUCCESSFUL JOBS   FAILED JOBS   CURRENT JOBS
 my-webhook-a1b2c3   true    2       1                 1             []
 my-webhook-d4e5f6   false   1       0                 0             [{"name":"my-job-xk9qz"}]
@@ -183,32 +193,27 @@ my-webhook-d4e5f6   false   1       0                 0             [{"name":"my
 
 ## Request Data in Jobs
 
-Every Job cloned by the operator has the original HTTP request data mounted as read-only files at `/var/run/secrets/kubernetes.io/request/` inside all containers:
+Every Job cloned by the operator has the original HTTP request data mounted as
+read-only files at `/var/run/secrets/kubernetes.io/request/` inside all pods:
 
-| File | Content |
-| ---- | ------- |
-| `body` | Request body |
-| `headers` | All headers serialised as JSON |
-| `host` | Host header value |
-| `method` | HTTP method (`GET`, `POST`, …) |
-| `url` | Full request URL |
-| `remoteAddr` | Client IP and port (e.g. `10.0.0.5:54321`) |
-| `timestamp` | Time the request was received (RFC3339, UTC) |
-| `userAgent` | User-Agent header value |
-
-Access them from any container:
-
-```sh
-METHOD=$(cat /var/run/secrets/kubernetes.io/request/method)
-BODY=$(cat /var/run/secrets/kubernetes.io/request/body)
-WHEN=$(cat /var/run/secrets/kubernetes.io/request/timestamp)
-```
+| File         | Content                                        |
+| ------------ | ---------------------------------------------- |
+| `body`       | Request body                                   |
+| `headers`    | All headers serialised as JSON                 |
+| `host`       | Host header value                              |
+| `method`     | HTTP method (`GET`, `POST`, …)                 |
+| `url`        | Full request URL                               |
+| `remoteAddr` | Client IP and port (e.g. `10.0.0.5:54321`)     |
+| `timestamp`  | Time the request was received (UNIX timestamp) |
+| `userAgent`  | User-Agent header value                        |
 
 ---
 
 ## Example
 
-This example creates a Workflow that runs a Job with a random exit code. On failure it triggers a second Workflow that echoes the original HTTP request details.
+This example creates a Workflow that runs a Job with a random exit code. On
+failure it triggers a second Workflow that echoes the original HTTP request
+details.
 
 ```yaml
 # Job that randomly exits with code 0 or 1
@@ -218,7 +223,7 @@ metadata:
   name: job-example-random-exit
   namespace: simple-cicd
 spec:
-  suspend: true       # Prevents Kubernetes from running this directly
+  suspend: true # Prevents Kubernetes from running this directly
   backoffLimit: 0
   template:
     spec:
@@ -226,6 +231,20 @@ spec:
         - name: random-exit
           image: bash
           command: ["sh", "-c", "exit $$(($RANDOM % 2))"]
+        - name: echo-request
+          image: bash
+          command:
+            - sh
+            - -c
+            - |
+              echo "Host:      $(cat /var/run/secrets/kubernetes.io/request/host)"
+              echo "Headers:   $(cat /var/run/secrets/kubernetes.io/request/headers)"
+              echo "Method:    $(cat /var/run/secrets/kubernetes.io/request/method)"
+              echo "URL:       $(cat /var/run/secrets/kubernetes.io/request/url)"
+              echo "From:      $(cat /var/run/secrets/kubernetes.io/request/remoteAddr)"
+              echo "At:        $(cat /var/run/secrets/kubernetes.io/request/timestamp)"
+              echo "UserAgent: $(cat /var/run/secrets/kubernetes.io/request/userAgent)"
+              echo "Body:      $(cat /var/run/secrets/kubernetes.io/request/body)"
       restartPolicy: Never
 ---
 # Job that echoes the original HTTP request
@@ -239,18 +258,9 @@ spec:
   template:
     spec:
       containers:
-        - name: echo-request
+        - name: error
           image: bash
-          command:
-            - sh
-            - -c
-            - |
-              echo "Method:    $(cat /var/run/secrets/kubernetes.io/request/method)"
-              echo "URL:       $(cat /var/run/secrets/kubernetes.io/request/url)"
-              echo "From:      $(cat /var/run/secrets/kubernetes.io/request/remoteAddr)"
-              echo "At:        $(cat /var/run/secrets/kubernetes.io/request/timestamp)"
-              echo "UserAgent: $(cat /var/run/secrets/kubernetes.io/request/userAgent)"
-              echo "Body:      $(cat /var/run/secrets/kubernetes.io/request/body)"
+          command: ["echo", "ERROR"]
       restartPolicy: Never
 ---
 # Workflow triggered on failure: runs job-example-error
@@ -285,7 +295,20 @@ metadata:
 spec:
   workflows:
     - name: workflow-example
----
+```
+
+In this example, we are going to trigger our WorkflowWebhook requesting it
+through `kubectl port-forward`.
+
+```sh
+kubectl -n simple-cicd port-forward svc/operator 9000:9000 &
+curl -XPOST http://localhost:9000/simple-cicd/workflowwebhook-example
+```
+
+You could also trigger the WorkflowWebhook directly requesting it to the
+operator service, inside the cluster, or through LoadBalancer service.
+
+```yaml
 # Optional: Secret for basic-auth on the Ingress
 apiVersion: v1
 kind: Secret
@@ -329,14 +352,15 @@ Trigger it:
 curl -u user:pass -XPOST http://example.org/simple-cicd/workflowwebhook-example
 
 # From inside the cluster
-curl -XPOST http://simple-cicd.simple-cicd:9000/simple-cicd/workflowwebhook-example
+curl -XPOST http://operator.simple-cicd:9000/simple-cicd/workflowwebhook-example
 ```
 
 ---
 
 ## Motivation
 
-The motivation behind Simple CI/CD arises from the need for a tool that runs Jobs inside Kubernetes using webhooks, without requiring virtual machines, Docker-in-Docker, or components outside the Kubernetes ecosystem. Existing solutions either impose excessive requirements or fail to meet those expectations.
+Existing solutions either impose excessive requirements or requires virtual
+machines, Docker-in-Docker, or components outside the Kubernetes ecosystem.
 
 <!-- markdownlint-disable MD033 -->
 <table>
@@ -449,7 +473,7 @@ The motivation behind Simple CI/CD arises from the need for a tool that runs Job
 
 ### Development
 
-You'll need a Kubernetes cluster. [minikube](https://minikube.sigs.k8s.io) or [kind](https://sigs.k8s.io/kind) work well locally.
+You'll need a Kubernetes cluster. [minikube] or [kind] work well locally.
 
 ```sh
 # Install CRDs and run the operator locally (uses current kubeconfig context)
@@ -491,3 +515,7 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
+
+[minikube]: https://minikube.sigs.k8s.io
+[kind]: https://sigs.k8s.io/kind
+[Operator pattern]: https://kubernetes.io/docs/concepts/extend-kubernetes/operator/
