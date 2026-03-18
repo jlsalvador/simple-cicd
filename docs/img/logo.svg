@@ -27,9 +27,9 @@
      inkscape:deskcolor="#d1d1d1"
      inkscape:document-units="px"
      inkscape:export-bgcolor="#ffffff00"
-     inkscape:zoom="3.0595303"
-     inkscape:cx="114.0698"
-     inkscape:cy="90.37335"
+     inkscape:zoom="2"
+     inkscape:cx="156.75"
+     inkscape:cy="41.75"
      inkscape:window-width="2516"
      inkscape:window-height="1412"
      inkscape:window-x="0"
@@ -60,6 +60,17 @@
          x="230.65388"
          y="92.677567" />
     </clipPath>
+    <clipPath
+       clipPathUnits="userSpaceOnUse"
+       id="clipPath1-6-7">
+      <rect
+         style="fill:#000000;fill-opacity:1;stroke-width:2"
+         id="rect2-1-5"
+         width="55.583427"
+         height="91.86866"
+         x="230.65388"
+         y="92.677567" />
+    </clipPath>
   </defs>
   <g
      inkscape:label="Capa 1"
@@ -68,49 +79,42 @@
     <g
        id="g1"
        transform="translate(0,1.0000003)">
-      <text
-         xml:space="preserve"
-         style="font-weight:900;font-size:64px;font-family:'Noto Sans';-inkscape-font-specification:'Noto Sans Heavy';fill:#ffffff;stroke-width:2"
-         x="82.429916"
-         y="76.351997"
-         id="text1"><tspan
-           sodipodi:role="line"
-           id="tspan1"
-           x="82.429916"
-           y="76.351997"
-           style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:64px;font-family:'Nimbus Sans';-inkscape-font-specification:'Nimbus Sans Bold';fill:#000000;fill-opacity:1">imple</tspan></text>
       <g
          id="g3">
-        <rect
-           style="fill:#1e4854;fill-opacity:1;stroke-width:0.764583"
-           id="rect3-5-7"
-           width="14.767"
-           height="15.478273"
-           x="52.789127"
-           y="26.389595" />
-        <circle
-           style="fill:#1e4854;fill-opacity:1;stroke-width:2"
-           id="path1-5"
-           cx="231.08122"
-           cy="133.02695"
-           r="35.626385"
-           clip-path="url(#clipPath1-6)"
-           transform="matrix(-0.73131907,0,0,-0.70176117,222.37049,144.74742)" />
-        <circle
-           style="fill:#11747b;fill-opacity:1;stroke-width:2"
-           id="path1"
-           cx="231.08122"
-           cy="133.02695"
-           r="35.626385"
-           clip-path="url(#clipPath1)"
-           transform="matrix(0.73131907,0,0,0.70176117,-112.56842,-26.743955)" />
-        <rect
-           style="fill:#11747b;fill-opacity:1;stroke-width:1.36173"
-           id="rect3-5"
-           width="14.5"
-           height="50.00161"
-           x="42.115101"
-           y="41.607979" />
+        <g
+           id="g6"
+           transform="translate(4.1424727,4.801321)">
+          <text
+             xml:space="preserve"
+             style="font-weight:900;font-size:64px;font-family:'Noto Sans';-inkscape-font-specification:'Noto Sans Heavy';fill:#ffffff;stroke-width:2"
+             x="82.429916"
+             y="76.351997"
+             id="text1"><tspan
+               sodipodi:role="line"
+               id="tspan1"
+               x="82.429916"
+               y="76.351997"
+               style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:64px;font-family:'Nimbus Sans';-inkscape-font-specification:'Nimbus Sans Bold';fill:#000000;fill-opacity:1">imple</tspan></text>
+          <g
+             id="g5"
+             transform="translate(-2.7062346,-113.45464)">
+            <path
+               id="path2"
+               style="display:inline;fill:#1e4854;fill-opacity:1;stroke:none;stroke-linecap:round;paint-order:stroke markers fill"
+               d="m 132.875,-50.033203 a 27.822899,27.822899 0 0 0 13.91211,24.095703 27.822899,27.822899 0 0 0 27.82226,0 27.822899,27.822899 0 0 0 13.91211,-24.095703 H 160.69727 146.78711 V -68.568359 H 132.875 Z"
+               transform="rotate(90)" />
+            <g
+               id="g4"
+               transform="translate(-64.853442,15.801147)"
+               style="fill:#11747b;fill-opacity:1;stroke:none">
+              <path
+                 id="path2-0"
+                 style="fill:#11747b;fill-opacity:1;stroke:none;stroke-linecap:round;paint-order:stroke markers fill"
+                 d="m -130.98596,100.97454 h -55.64453 v 18.53515 a 27.822899,27.822899 0 0 0 13.91015,24.09571 27.822899,27.822899 0 0 0 27.82422,0 27.822899,27.822899 0 0 0 13.91016,-24.09571 z"
+                 transform="rotate(-90)" />
+            </g>
+          </g>
+        </g>
       </g>
     </g>
   </g>
