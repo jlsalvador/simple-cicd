@@ -128,13 +128,13 @@ docker-builder-create: ## Create (once) the buildx builder with multi-platform s
 			--bootstrap
 
 .PHONY: docker-build
-docker-build: docker-builder-create ## Build multi-platform image (local cache only, no push)
+docker-build: docker-builder-create ## Build image (local cache only, no push)
 	docker buildx build \
 		-f Dockerfile.operator \
 		--builder $(BUILDX_BUILDER) \
-		--platform $(PLATFORMS) \
 		--build-arg VERSION=$(VERSION) \
 		--tag $(IMAGE) \
+		--load \
 		.
 
 .PHONY: docker-push
@@ -170,17 +170,11 @@ helm-template: ## Render chart templates to stdout (dry-run)
 		--set image.tag=$(VERSION)
 
 .PHONY: helm-install
-helm-install: ## Install the chart (first time)
-	helm install $(HELM_RELEASE) $(CHART_DIR) \
+helm-install: ## Install or Upgrade an existing chart release
+	helm upgrade $(HELM_RELEASE) $(CHART_DIR) \
+		--install \
 		--namespace $(HELM_NAMESPACE) \
 		--create-namespace \
-		--set image.repository=$(IMAGE_REGISTRY)/$(IMAGE_NAME) \
-		--set image.tag=$(VERSION)
-
-.PHONY: helm-upgrade
-helm-upgrade: ## Upgrade an existing chart release
-	helm upgrade $(HELM_RELEASE) $(CHART_DIR) \
-		--namespace $(HELM_NAMESPACE) \
 		--set image.repository=$(IMAGE_REGISTRY)/$(IMAGE_NAME) \
 		--set image.tag=$(VERSION)
 

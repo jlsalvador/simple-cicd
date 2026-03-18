@@ -118,7 +118,7 @@ spec:
   next:
     - name: my-next-workflow
       when: OnAnyFailure # OnSuccess | OnAnySuccess | OnFailure | OnAnyFailure | Always
-  suspend: false # Set to true to skip execution without deleting
+  suspend: false # Set to true to skip execution without deleting.
 ```
 
 ### WorkflowWebhook
@@ -450,43 +450,6 @@ language.
 
 ---
 
-## Contributing
-
-### Design rules
-
-- Keep it Simple
-- Be Explicit
-- Embrace Minimalism
-
-### Development
-
-You'll need a Kubernetes cluster. [minikube] or [kind] work well locally.
-
-```sh
-# Install CRDs and run the operator locally (uses current kubeconfig context)
-make install-crds
-make run
-
-# Build and push a multi-platform image
-make docker-push IMAGE_REGISTRY=ghcr.io/jlsalvador IMAGE_TAG=dev
-
-# Deploy to the cluster
-make deploy
-
-# Lint and validate the Helm chart
-make helm-lint
-
-# Render chart templates to stdout
-make helm-template
-
-# Render everything into a single install.yaml
-make helm-manifests
-```
-
-Run `make help` for the full list of available targets.
-
----
-
 ## License
 
 Copyright 2023 José Luis Salvador Rufo <salvador.joseluis@gmail.com>.
@@ -503,6 +466,4 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 
-[minikube]: https://minikube.sigs.k8s.io
-[kind]: https://sigs.k8s.io/kind
 [Operator pattern]: https://kubernetes.io/docs/concepts/extend-kubernetes/operator/
