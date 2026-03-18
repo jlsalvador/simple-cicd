@@ -193,9 +193,9 @@ containers:
 
 ## Example
 
-This example creates a Workflow that runs a Job with a random exit code. On
-failure it triggers a second Workflow that echoes the original HTTP request
-details.
+This example creates a workflow that runs a job, echoing the original HTTP
+request and returning a random exit code. On failure, it triggers a second
+workflow that echoes "ERROR".
 
 ```yaml
 # Job that randomly exits with code 0 or 1.
@@ -289,6 +289,9 @@ curl -XPOST http://localhost:9000/example/workflowwebhook-example
 You could also trigger the WorkflowWebhook directly requesting it to the
 operator service, inside the cluster, or through LoadBalancer service.
 
+The next example shows how to configure an Ingress for exposing the operator service
+externally.
+
 ```yaml
 # Secret for basic-auth for the Ingress.
 apiVersion: v1
@@ -326,7 +329,7 @@ spec:
                   number: 9000
 ```
 
-Trigger it:
+Trigger the example WorkflowWebhook:
 
 ```sh
 # From outside the cluster
