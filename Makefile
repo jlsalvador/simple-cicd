@@ -20,7 +20,7 @@ BUILDX_BUILDER  ?= simple-cicd-builder
 LOCALBIN ?= $(shell pwd)/bin
 $(LOCALBIN):
 	mkdir -p $(LOCALBIN)
-	
+
 ## Tool Binaries
 GOCYCLO ?= $(LOCALBIN)/gocyclo
 MISSPELL ?= $(LOCALBIN)/misspell
@@ -130,7 +130,7 @@ docker-builder-create: ## Create (once) the buildx builder with multi-platform s
 .PHONY: docker-build
 docker-build: docker-builder-create ## Build multi-platform image (local cache only, no push)
 	docker buildx build \
-		-f Dockerfile.operator
+		-f Dockerfile.operator \
 		--builder $(BUILDX_BUILDER) \
 		--platform $(PLATFORMS) \
 		--build-arg VERSION=$(VERSION) \
@@ -140,7 +140,7 @@ docker-build: docker-builder-create ## Build multi-platform image (local cache o
 .PHONY: docker-push
 docker-push: docker-builder-create ## Build and push multi-platform image to the registry
 	docker buildx build \
-		-f Dockerfile.operator
+		-f Dockerfile.operator \
 		--builder $(BUILDX_BUILDER) \
 		--platform $(PLATFORMS) \
 		--build-arg VERSION=$(VERSION) \
