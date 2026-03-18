@@ -6,7 +6,6 @@ metadata:
   labels:
     {{- include "simple-cicd.labels" . | nindent 4 }}
 spec:
-  # Only one replica to avoid duplicate reconciliations.
   replicas: {{ .Values.replicaCount }}
   selector:
     matchLabels:
@@ -31,6 +30,13 @@ spec:
         - name: operator
           image: {{ include "simple-cicd.image" . }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+          - name: POD_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.name
+          - name: LEASE_NAME
+            value: {{ include "simple-cicd.fullname" . }}
           ports:
             - containerPort: 9000
               name: webhook

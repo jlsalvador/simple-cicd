@@ -72,6 +72,15 @@ func (f *handlerFakeClient) CreateJobRaw(_ string, _ map[string]any) (k8s.Create
 	return k8s.CreatedResource{}, nil
 }
 func (f *handlerFakeClient) DeleteJob(_, _ string) error { return nil }
+func (f *handlerFakeClient) GetLease(_, _ string) (*types.Lease, error) {
+	return &types.Lease{}, nil
+}
+func (f *handlerFakeClient) CreateLease(_ string, _ *types.Lease) (*types.Lease, error) {
+	return &types.Lease{}, nil
+}
+func (f *handlerFakeClient) UpdateLease(_ *types.Lease) (*types.Lease, error) {
+	return &types.Lease{}, nil
+}
 
 // --------------------------------------------------------------------------
 // parsePath

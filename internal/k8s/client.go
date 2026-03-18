@@ -119,7 +119,7 @@ func (c *Client) get(path string, out any) error {
 		return err
 	}
 	if status < 200 || status >= 300 {
-		return fmt.Errorf("GET %s: status %d: %s", path, status, string(data))
+		return &StatusError{Code: status, Path: "GET " + path, Body: string(data)}
 	}
 	return json.Unmarshal(data, out)
 }
@@ -130,7 +130,21 @@ func (c *Client) post(path string, body, out any) error {
 		return err
 	}
 	if status < 200 || status >= 300 {
-		return fmt.Errorf("POST %s: status %d: %s", path, status, string(data))
+		return &StatusError{Code: status, Path: "POST " + path, Body: string(data)}
+	}
+	if out != nil {
+		return json.Unmarshal(data, out)
+	}
+	return nil
+}
+
+func (c *Client) put(path string, body, out any) error {
+	data, status, err := c.doRequest("PUT", path, body, "application/json")
+	if err != nil {
+		return err
+	}
+	if status < 200 || status >= 300 {
+		return &StatusError{Code: status, Path: "PUT " + path, Body: string(data)}
 	}
 	if out != nil {
 		return json.Unmarshal(data, out)
@@ -144,7 +158,7 @@ func (c *Client) mergePatch(path string, patch any) error {
 		return err
 	}
 	if status < 200 || status >= 300 {
-		return fmt.Errorf("PATCH %s: status %d: %s", path, status, string(data))
+		return &StatusError{Code: status, Path: "PATCH " + path, Body: string(data)}
 	}
 	return nil
 }
@@ -155,7 +169,7 @@ func (c *Client) delete(path string) error {
 		return err
 	}
 	if status < 200 || status >= 300 {
-		return fmt.Errorf("DELETE %s: status %d: %s", path, status, string(data))
+		return &StatusError{Code: status, Path: "DELETE " + path, Body: string(data)}
 	}
 	return nil
 }

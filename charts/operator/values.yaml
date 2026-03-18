@@ -1,5 +1,4 @@
 ## Number of operator replicas.
-## Only 1 is supported to avoid duplicate reconciliations.
 replicaCount: 1
 
 image:

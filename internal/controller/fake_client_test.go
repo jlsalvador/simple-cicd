@@ -277,3 +277,13 @@ func (f *fakeClient) DeleteJob(namespace, name string) error {
 	delete(f.liveJobs, f.key(namespace, name))
 	return nil
 }
+
+func (f *fakeClient) GetLease(_, _ string) (*types.Lease, error) {
+	return &types.Lease{}, nil
+}
+func (f *fakeClient) CreateLease(_ string, _ *types.Lease) (*types.Lease, error) {
+	return &types.Lease{}, nil
+}
+func (f *fakeClient) UpdateLease(_ *types.Lease) (*types.Lease, error) {
+	return &types.Lease{}, nil
+}

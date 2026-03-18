@@ -12,6 +12,7 @@ import (
 
 	"github.com/jlsalvador/simple-cicd/internal/controller"
 	"github.com/jlsalvador/simple-cicd/internal/k8s"
+	"github.com/jlsalvador/simple-cicd/internal/leaderelection"
 	"github.com/jlsalvador/simple-cicd/internal/version"
 	"github.com/jlsalvador/simple-cicd/internal/webhook"
 )
@@ -28,18 +29,30 @@ func main() {
 	reconciler := controller.NewReconciler(client)
 	webhookHandler := webhook.NewHandler(client, reconciler.Trigger)
 
-	// Start the reconciliation loop in the background
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	go reconciler.Run(ctx)
 
-	// Set up the HTTP server
+	// Start leader election. Only the elected leader runs the reconciler;
+	// all replicas serve the webhook handler (stateless).
+	go leaderelection.Run(
+		ctx,
+		leaderelection.Config{
+			Client: client,
+		},
+		func(leadCtx context.Context) {
+			log.Println("[main] leading: starting reconciler")
+			reconciler.Run(leadCtx)
+			log.Println("[main] reconciler stopped")
+		},
+	)
+
+	// HTTP server (all replicas).
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		fmt.Fprintf(w, "ok\nversion: %s\n", version.Version)
 	})
-	// All other paths are delegated to the webhook handler
+	// All other paths are delegated to the webhook handler.
 	mux.Handle("/", webhookHandler)
 
 	server := &http.Server{
@@ -50,13 +63,13 @@ func main() {
 		IdleTimeout:  60 * time.Second,
 	}
 
-	// Graceful shutdown on SIGINT / SIGTERM
+	// Graceful shutdown on SIGINT / SIGTERM.
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
 		sig := <-sigCh
 		log.Printf("received signal %v - shutting down", sig)
-		cancel() // stop the reconciler
+		cancel() // stop the operator.
 
 		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer shutdownCancel()

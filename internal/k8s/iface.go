@@ -7,13 +7,16 @@ import "github.com/jlsalvador/simple-cicd/internal/types"
 // the interface and the concrete type in sync and allows other packages to
 // depend on the abstraction rather than the concrete *Client.
 type ClientIface interface {
-	// Workflow
+	// Workflow.
+
 	GetWorkflow(namespace, name string) (*types.Workflow, error)
 
-	// WorkflowWebhook
+	// WorkflowWebhook.
+
 	GetWorkflowWebhook(namespace, name string) (*types.WorkflowWebhook, error)
 
-	// WorkflowWebhookRequest
+	// WorkflowWebhookRequest.
+
 	CreateWWR(wwr *types.WorkflowWebhookRequest) (*types.WorkflowWebhookRequest, error)
 	GetWWR(namespace, name string) (*types.WorkflowWebhookRequest, error)
 	ListWWRs(namespace string) ([]types.WorkflowWebhookRequest, error)
@@ -22,14 +25,22 @@ type ClientIface interface {
 	PatchWWRFinalizers(wwr *types.WorkflowWebhookRequest) error
 	DeleteWWR(namespace, name string) error
 
-	// Secrets
+	// Secrets.
+
 	CreateSecretForJob(namespace, secretName string, req types.WebhookRequestData, jobName, jobUID string) error
 
-	// Jobs
+	// Jobs.
+
 	GetJob(namespace, name string) (*types.Job, error)
 	GetJobRaw(namespace, name string) (map[string]any, error)
 	CreateJobRaw(namespace string, job map[string]any) (CreatedResource, error)
 	DeleteJob(namespace, name string) error
+
+	// Leases.
+
+	GetLease(namespace, name string) (*types.Lease, error)
+	CreateLease(namespace string, lease *types.Lease) (*types.Lease, error)
+	UpdateLease(lease *types.Lease) (*types.Lease, error)
 }
 
 // Ensure *Client satisfies the interface at compile time.

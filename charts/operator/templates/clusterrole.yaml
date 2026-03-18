@@ -5,17 +5,17 @@ metadata:
   labels:
     {{- include "simple-cicd.labels" . | nindent 4 }}
 rules:
-  # Read Workflows and WorkflowWebhooks
+  # Read Workflows and WorkflowWebhooks.
   - apiGroups: ["simple-cicd.jlsalvador.online"]
     resources: ["workflows", "workflowwebhooks"]
     verbs: ["get", "list", "watch"]
 
-  # Full control over WorkflowWebhookRequests (create, read, patch finalizers, delete)
+  # Full control over WorkflowWebhookRequests (create, read, patch finalizers, delete).
   - apiGroups: ["simple-cicd.jlsalvador.online"]
     resources: ["workflowwebhookrequests"]
     verbs: ["get", "list", "watch", "create", "patch", "delete"]
 
-  # Write access to the status subresource (UpdateWWRStatus uses PATCH .../status)
+  # Write access to the status subresource (UpdateWWRStatus uses PATCH .../status).
   - apiGroups: ["simple-cicd.jlsalvador.online"]
     resources: ["workflowwebhookrequests/status"]
     verbs: ["patch"]
@@ -26,7 +26,12 @@ rules:
     resources: ["secrets"]
     verbs: ["create"]
 
-  # Clone and inspect batch Jobs
+  # Clone and inspect batch Jobs.
   - apiGroups: ["batch"]
     resources: ["jobs"]
     verbs: ["get", "list", "watch", "create", "delete"]
+
+  # Create and manage Lease objects for leader election.
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["get", "create", "update"]
