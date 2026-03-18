@@ -433,7 +433,7 @@ language.
         <li>Kubernetes-native operator.</li>
         <li>Platform agnostic (cloud, on-premise, hybrid, air-gap).</li>
         <li>No external dependencies.</li>
-        <li>Low resource usage (~32 MB RAM).</li>
+        <li>Low resource usage (~8 MB RAM).</li>
       </ul></td>
       <td><ul>
         <li>Experimental; not yet battle-tested in production.</li>
