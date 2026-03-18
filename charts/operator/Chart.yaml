@@ -1,18 +1,35 @@
 apiVersion: v2
 name: operator
-description: A lightweight Kubernetes-native CI/CD operator driven by webhooks and workflows.
+description:  🚀 Simple CI/CD operator for Kubernetes. Manage jobs, workflows, and webhooks natively via K8s APIs.
 type: application
 # Chart version and appVersion are kept in sync with the git tag.
 version: 0.1.4
 appVersion: "v0.1.4"
 keywords:
+  - cd
+  - ci
+  - ci-cd
   - cicd
+  - continuous-delivery
+  - continuous-integration
+  - controller
+  - k8s
+  - k8s-controller
+  - k8s-operator
+  - kubernetes
+  - kubernetes-controller
+  - kubernetes-operator
   - operator
+  - pipeline
   - webhook
+  - webhook-server
   - workflow
+  - yaml
 home: https://github.com/jlsalvador/simple-cicd
 sources:
   - https://github.com/jlsalvador/simple-cicd
 maintainers:
-  - name: jlsalvador
+  - name: José Luis Salvador Rufo
+    email: salvador.joseluis@gmail.com
+    url: https://github.com/jlsalvador
 icon: https://raw.githubusercontent.com/jlsalvador/simple-cicd/refs/heads/main/docs/img/logo.png
