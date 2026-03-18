@@ -163,11 +163,11 @@ Created automatically by the operator on each incoming HTTP request. Tracks the
 full execution lifecycle.
 
 ```sh
-kubectl get wwr -n simple-cicd -o wide
+kubectl get wwr -n example
 
-NAME                        DONE    STEPS   SUCCESSFUL JOBS   FAILED JOBS   CURRENT JOBS
-my-webhook-a1b2c3   true    2       1                 1             []
-my-webhook-d4e5f6   false   1       0                 0             [{"name":"my-job-xk9qz"}]
+NAME                            DONE   WEBHOOK                   SUCCESSFUL JOBS   FAILED JOBS   AGE
+workflowwebhook-example-b5lmh   true   workflowwebhook-example   1                 0             76s
+workflowwebhook-example-lw2ws   true   workflowwebhook-example   1                 1             12m
 ```
 
 ---
