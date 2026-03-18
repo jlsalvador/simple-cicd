@@ -79,38 +79,30 @@ spec:
                   body:
                     description: Base64-encoded request body.
                     type: string
-                    format: byte
                   headers:
                     description: Base64-encoded JSON map of request headers.
                     type: string
-                    format: byte
                   host:
                     description: Base64-encoded Host header value.
                     type: string
-                    format: byte
                   method:
                     description: Base64-encoded HTTP method (e.g. GET, POST).
                     type: string
-                    format: byte
                   remoteAddr:
                     description: Base64-encoded remote address of the caller.
                     type: string
-                    format: byte
                   timestamp:
                     description: >
                       Base64-encoded Unix epoch (seconds since
                       1970-01-01 00:00:00 UTC) at which the webhook was
                       received. Example decoded value: "1735689600".
                     type: string
-                    format: byte
                   url:
                     description: Base64-encoded request URL.
                     type: string
-                    format: byte
                   userAgent:
                     description: Base64-encoded User-Agent header value.
                     type: string
-                    format: byte
                 required:
                 - body
                 - headers
