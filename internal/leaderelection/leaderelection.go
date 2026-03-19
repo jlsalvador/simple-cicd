@@ -11,6 +11,7 @@ import (
 	"context"
 	"log"
 	"os"
+	"os/exec"
 	"strings"
 	"time"
 
@@ -87,10 +88,24 @@ func getDefaultNamespace() string {
 			return ns
 		}
 	}
-	if ns := os.Getenv("NAMESPACE"); ns != "" {
+	// Out-of-cluster: ask kubectl directly.
+	if ns := kubectlCurrentNamespace(); ns != "" {
 		return ns
 	}
 	return "default"
+}
+
+// kubectlCurrentNamespace runs `kubectl config view --minify --output jsonpath=...`
+// to get the namespace of the current context. Returns "" on any error.
+func kubectlCurrentNamespace() string {
+	out, err := exec.Command(
+		"kubectl", "config", "view",
+		"--minify", "--output", "jsonpath={.contexts[0].context.namespace}",
+	).Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
 }
 
 // getDefaultLeaseName returns the name of the Lease to be created.

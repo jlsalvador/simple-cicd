@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -49,8 +50,25 @@ type Client struct {
 	baseURL string
 }
 
-// NewClient reads the in-cluster service-account credentials and builds a Client.
+// NewClient auto-detects the runtime environment:
+//   - Inside a pod: reads /var/run/secrets/kubernetes.io/serviceaccount
+//   - Outside a pod: expects kubectl proxy on KUBECTL_PROXY_URL (default http://127.0.0.1:8001)
 func NewClient() (*Client, error) {
+	if isInCluster() {
+		return newInClusterClient()
+	}
+	return newProxyClient(), nil
+}
+
+// isInCluster returns true when the service-account token file is present.
+func isInCluster() bool {
+	_, err := os.Stat(serviceAccountDir + "/token")
+	return err == nil
+}
+
+// newInClusterClient reads the in-cluster service-account credentials and
+// builds a Client.
+func newInClusterClient() (*Client, error) {
 	caCert, err := os.ReadFile(serviceAccountDir + "/ca.crt")
 	if err != nil {
 		return nil, fmt.Errorf("reading ca.crt: %w", err)
@@ -74,6 +92,21 @@ func NewClient() (*Client, error) {
 		token:   strings.TrimSpace(string(tokenBytes)),
 		baseURL: k8sBaseURL(),
 	}, nil
+}
+
+// newProxyClient builds a Client that talks to a local kubectl proxy.
+// No TLS, no auth token — kubectl handles both.
+func newProxyClient() *Client {
+	baseURL := os.Getenv("KUBECTL_PROXY_URL")
+	if baseURL == "" {
+		baseURL = "http://127.0.0.1:8001"
+	}
+	log.Printf("out-of-cluster mode: using kubectl proxy at %s", baseURL)
+	return &Client{
+		http:    &http.Client{},
+		token:   "", // kubectl proxy handles auth
+		baseURL: strings.TrimRight(baseURL, "/"),
+	}
 }
 
 // --------------------------------------------------------------------------

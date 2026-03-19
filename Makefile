@@ -1,11 +1,3 @@
-IMAGE_REGISTRY  ?= ghcr.io/jlsalvador
-IMAGE_NAME      ?= simple-cicd
-# IMAGE_TAG defaults to the git-derived version; override as needed
-IMAGE_TAG       ?= $(VERSION)
-IMAGE           := $(IMAGE_REGISTRY)/$(IMAGE_NAME):$(IMAGE_TAG)
-
-NAMESPACE       ?= simple-cicd
-
 # Version is read from the latest git tag (e.g. v1.2.3).
 # Override with: make build VERSION=v0.0.1
 VERSION         ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
@@ -15,6 +7,18 @@ GOFLAGS         ?= -trimpath -ldflags="$(LDFLAGS)"
 
 PLATFORMS       ?= linux/amd64,linux/arm64,linux/ppc64le,linux/s390x
 BUILDX_BUILDER  ?= simple-cicd-builder
+
+# Container image settings.
+IMAGE_REGISTRY  ?= ghcr.io/jlsalvador
+IMAGE_NAME      ?= simple-cicd
+# IMAGE_TAG defaults to the git-derived version; override as needed
+IMAGE_TAG       ?= $(VERSION)
+IMAGE           := $(IMAGE_REGISTRY)/$(IMAGE_NAME):$(IMAGE_TAG)
+
+## kubectl proxy settings.
+KUBECTL_PROXY_URL ?= http://127.0.0.1:8001
+KUBECTL_PROXY_PORT   = $(lastword $(subst :, ,$(KUBECTL_PROXY_URL)))
+KUBECTL_PROXY_PID_FILE = /tmp/simple-cicd-kubectl-proxy.pid
 
 ## Location to install dependencies to
 LOCALBIN ?= $(shell pwd)/bin
@@ -156,7 +160,7 @@ docker-builder-rm: ## Remove the buildx builder
 
 CHART_DIR       ?= charts/operator
 HELM_RELEASE    ?= operator
-HELM_NAMESPACE  ?= $(NAMESPACE)
+HELM_NAMESPACE  ?= simple-cicd
 
 .PHONY: helm-lint
 helm-lint: ## Lint the Helm chart
@@ -196,16 +200,7 @@ helm-manifests: _mkdir_build ## Render chart into a single operator.yaml (kubect
 helm-package: _mkdir_build ## Package the chart into a .tgz in bin/
 	helm package $(CHART_DIR) --destination bin/
 
-##@ Deploy
-
-.PHONY: run
-run: ## Run the operator locally using KUBECONFIG
-	@echo "NOTE: override K8S_HOST and SA_DIR if running outside the cluster"
-	go run ./cmd/operator
-
-.PHONY: namespace
-namespace: ## Create the operator namespace (idempotent)
-	kubectl create namespace $(NAMESPACE) --dry-run=client -o yaml | kubectl apply -f -
+##@ Development
 
 .PHONY: install-crds
 install-crds: ## Install (or upgrade) the three CRDs into the cluster
@@ -221,17 +216,33 @@ install-crds: ## Install (or upgrade) the three CRDs into the cluster
 uninstall-crds: ## Remove the CRDs
 	kubectl delete -f $(CHART_DIR)/crds/ --ignore-not-found
 
-.PHONY: restart
-restart: ## Roll out a fresh deployment (pulls the latest image)
-	kubectl -n $(NAMESPACE) rollout restart deployment/$(HELM_RELEASE)
+.PHONY: proxy
+proxy: ## Run kubectl proxy if not already running.
+	@if curl -sf $(KUBECTL_PROXY_URL)/api > /dev/null 2>&1; then \
+		echo "[proxy] already running on $(KUBECTL_PROXY_URL)"; \
+	else \
+		echo "[proxy] starting kubectl proxy on port $(KUBECTL_PROXY_PORT)..."; \
+		kubectl proxy --port=$(KUBECTL_PROXY_PORT) > /dev/null 2>&1 & \
+		echo $$! > $(KUBECTL_PROXY_PID_FILE); \
+		until curl -sf $(KUBECTL_PROXY_URL)/api > /dev/null 2>&1; do sleep 0.2; done; \
+		echo "[proxy] ready (PID $$(cat $(KUBECTL_PROXY_PID_FILE)))"; \
+	fi
 
-.PHONY: status
-status: ## Show rollout status
-	kubectl -n $(NAMESPACE) rollout status deployment/$(HELM_RELEASE)
+.PHONY: stop-proxy
+stop-proxy: ## Stop the kubectl proxy started by us.
+	@if [ -f $(KUBECTL_PROXY_PID_FILE) ]; then \
+		kill $$(cat $(KUBECTL_PROXY_PID_FILE)) 2>/dev/null \
+			&& echo "[proxy] stopped" \
+			|| echo "[proxy] process already gone"; \
+		rm -f $(KUBECTL_PROXY_PID_FILE); \
+	else \
+		echo "[proxy] not running by us (no PID file)"; \
+	fi
 
-.PHONY: logs
-logs: ## Tail operator logs
-	kubectl -n $(NAMESPACE) logs -l app.kubernetes.io/name=$(HELM_RELEASE) --follow
+.PHONY: run
+run: proxy ## Run the operator locally, requires kubectl proxy running.
+	@KUBECTL_PROXY_URL=$(KUBECTL_PROXY_URL) go run ./cmd/operator; true
+	@$(MAKE) stop-proxy
 
 ##@ Cleaning
 
