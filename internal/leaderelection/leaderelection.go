@@ -24,7 +24,7 @@ type Config struct {
 	Client k8s.ClientIface
 
 	// Namespace is where the Lease object lives.
-	// Default: NAMESPACE env var, then current namespace, then "default".
+	// Default: POD_NAMESPACE env var, then current namespace, then "default".
 	Namespace string
 
 	// LeaseName is the name of the Lease object (shared by all replicas).
@@ -75,8 +75,12 @@ func (c *Config) applyDefaults() {
 // getDefaultNamespace returns the namespace where the Lease should be created.
 //
 // Reads the pod's own namespace from the service-account projection first,
-// then falls back to the NAMESPACE env var, then "default".
+// then falls back to the POD_NAMESPACE env var, then "default".
 func getDefaultNamespace() string {
+	if ns := os.Getenv("POD_NAMESPACE"); ns != "" {
+		return ns
+	}
+	// In-cluster: service-account projection.
 	const nsFile = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
 	if data, err := os.ReadFile(nsFile); err == nil {
 		if ns := strings.TrimSpace(string(data)); ns != "" {
