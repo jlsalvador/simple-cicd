@@ -218,13 +218,13 @@ spec:
             - sh
             - -c
             - |
-              echo "Host:      $(cat /var/run/secrets/kubernetes.io/request/host)"
-              echo "Headers:   $(cat /var/run/secrets/kubernetes.io/request/headers)"
-              echo "Method:    $(cat /var/run/secrets/kubernetes.io/request/method)"
-              echo "URL:       $(cat /var/run/secrets/kubernetes.io/request/url)"
-              echo "From:      $(cat /var/run/secrets/kubernetes.io/request/remoteAddr)"
-              echo "At:        $(cat /var/run/secrets/kubernetes.io/request/timestamp)"
-              echo "Body:      $(cat /var/run/secrets/kubernetes.io/request/body)"
+              echo "Host:       $(cat /var/run/secrets/kubernetes.io/request/host)"
+              echo "Headers:    $(cat /var/run/secrets/kubernetes.io/request/headers)"
+              echo "Method:     $(cat /var/run/secrets/kubernetes.io/request/method)"
+              echo "URL:        $(cat /var/run/secrets/kubernetes.io/request/url)"
+              echo "RemoteAddr: $(cat /var/run/secrets/kubernetes.io/request/remoteAddr)"
+              echo "Timestamp:  $(cat /var/run/secrets/kubernetes.io/request/timestamp)"
+              echo "Body:       $(cat /var/run/secrets/kubernetes.io/request/body)"
       restartPolicy: Never # Do not re-run the pod if something fails.
 ---
 # Job that echoes "ERROR".
