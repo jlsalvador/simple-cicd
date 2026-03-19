@@ -140,7 +140,6 @@ type WebhookRequestData struct {
 	URL        string `json:"url"`
 	RemoteAddr string `json:"remoteAddr"`
 	Timestamp  string `json:"timestamp"`
-	UserAgent  string `json:"userAgent"`
 }
 
 // WorkflowWebhookRequestSpec stores the references needed to process the request.

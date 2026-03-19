@@ -101,7 +101,6 @@ func makeRequestData() types.WebhookRequestData {
 		URL:        "Lw==",             // base64("/")
 		RemoteAddr: "MTI3LjAuMC4x",     // base64("127.0.0.1")
 		Timestamp:  "MTczNTY4OTYwMA==", // base64("1735689600")
-		UserAgent:  "dGVzdA==",         // base64("test")
 	}
 }
 

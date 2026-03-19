@@ -80,7 +80,6 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		URL:        base64.StdEncoding.EncodeToString([]byte(r.URL.String())),
 		RemoteAddr: base64.StdEncoding.EncodeToString([]byte(r.RemoteAddr)),
 		Timestamp:  base64.StdEncoding.EncodeToString(fmt.Append(nil, time.Now().Unix())),
-		UserAgent:  base64.StdEncoding.EncodeToString([]byte(r.UserAgent())),
 	}
 
 	wwr := &types.WorkflowWebhookRequest{

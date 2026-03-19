@@ -154,8 +154,6 @@ func TestHandler_ValidRequest(t *testing.T) {
 	assertBase64(t, "method", req2.Method, "POST")
 	// Body should be base64(`{"event":"push"}`)
 	assertBase64(t, "body", req2.Body, body)
-	// UserAgent
-	assertBase64(t, "userAgent", req2.UserAgent, "test-agent/1.0")
 
 	// Timestamp must decode to a valid Unix epoch
 	tsDecoded := mustDecodeBase64(t, "timestamp", req2.Timestamp)

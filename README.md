@@ -187,7 +187,6 @@ containers:
 | `url`        | Full request URL                               |
 | `remoteAddr` | Client IP and port (e.g. `10.0.0.5:54321`)     |
 | `timestamp`  | Time the request was received (UNIX timestamp) |
-| `userAgent`  | User-Agent header value                        |
 
 ---
 
@@ -225,7 +224,6 @@ spec:
               echo "URL:       $(cat /var/run/secrets/kubernetes.io/request/url)"
               echo "From:      $(cat /var/run/secrets/kubernetes.io/request/remoteAddr)"
               echo "At:        $(cat /var/run/secrets/kubernetes.io/request/timestamp)"
-              echo "UserAgent: $(cat /var/run/secrets/kubernetes.io/request/userAgent)"
               echo "Body:      $(cat /var/run/secrets/kubernetes.io/request/body)"
       restartPolicy: Never # Do not re-run the pod if something fails.
 ---

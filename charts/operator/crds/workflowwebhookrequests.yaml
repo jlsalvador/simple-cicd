@@ -100,9 +100,6 @@ spec:
                   url:
                     description: Base64-encoded request URL.
                     type: string
-                  userAgent:
-                    description: Base64-encoded User-Agent header value.
-                    type: string
                 required:
                 - body
                 - headers
@@ -111,7 +108,6 @@ spec:
                 - remoteAddr
                 - timestamp
                 - url
-                - userAgent
                 type: object
               workflowWebhook:
                 description: >

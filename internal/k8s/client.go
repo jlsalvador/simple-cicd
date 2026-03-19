@@ -305,7 +305,6 @@ func (c *Client) CreateSecretForJob(
 			"url":        req.URL,
 			"remoteAddr": req.RemoteAddr,
 			"timestamp":  req.Timestamp,
-			"userAgent":  req.UserAgent,
 		},
 	}
 
