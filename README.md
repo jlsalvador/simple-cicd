@@ -152,7 +152,7 @@ spec:
 | `Forbid`  | Creates the WWR without executing any Workflow. |
 | `Replace` | Deletes any running WWR and starts a fresh one. |
 
-> **ℹ️ Note:**
+> [!NOTE]
 > With `Forbid`, the HTTP response is still `202 Accepted`. The WWR
 > is created and immediately marked done. Inspect `status.conditions` to
 > determine whether execution was actually skipped.
@@ -179,7 +179,7 @@ When set, the operator forcibly terminates all running Jobs and marks the WWR
 done with reason `DeadlineExceeded` if it has not completed within the specified
 number of seconds of its creation. Omitting the field disables the deadline.
 
-> **ℹ️ Note:**
+> [!NOTE]
 > `activeDeadlineSeconds` is measured from `metadata.creationTimestamp`, not
 > from when execution actually started, making it a hard wall-clock limit on
 > the total time a request may occupy the system.
@@ -235,7 +235,7 @@ cross-namespace Jobs.
 | `remoteAddr` | Client IP and port (e.g. `10.0.0.5:54321`)     |
 | `timestamp`  | Time the request was received (UNIX timestamp) |
 
-> **⚠️ Important:**
+> [!CAUTION]
 > Job templates **must** have `spec.suspend: true`. Without it,
 > Kubernetes will run the Job immediately when it is created as a template,
 > before the operator has a chance to clone it. The operator sets
@@ -338,7 +338,7 @@ kubectl -n simple-cicd port-forward svc/operator 9000:9000 &
 curl -XPOST http://localhost:9000/example/workflowwebhook-example
 ```
 
-> **ℹ️ Note:**
+> [!TIP]
 > You can also reach the operator directly from within the cluster or expose it
 > through any Service. Remember to set up proper authentication & authorization.
 
