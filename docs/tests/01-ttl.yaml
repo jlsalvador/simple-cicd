@@ -1,0 +1,51 @@
+# Example: ttlSecondsAfterFinished
+#
+# The WorkflowWebhook has ttlSecondsAfterFinished=60. Once the WWR finishes
+# (successfully or not) the operator will delete it after 60s.
+#
+# How to trigger:
+#   curl -X POST http://localhost:9000/example-ttl/workflowwebhook-ttl
+#
+# What to observe:
+#   kubectl -n example-ttl get wwr -w
+#   # WWR appears, Done becomes true, then disappears ~60s later.
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: example-ttl
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: job-quick-success
+  namespace: example-ttl
+spec:
+  suspend: true
+  backoffLimit: 0
+  template:
+    spec:
+      containers:
+        - name: success
+          image: bash
+          command: ["echo", "done"]
+      restartPolicy: Never
+---
+apiVersion: simple-cicd.jlsalvador.online/v1alpha2
+kind: Workflow
+metadata:
+  name: workflow-ttl
+  namespace: example-ttl
+spec:
+  jobsToBeCloned:
+    - name: job-quick-success
+---
+apiVersion: simple-cicd.jlsalvador.online/v1alpha2
+kind: WorkflowWebhook
+metadata:
+  name: workflowwebhook-ttl
+  namespace: example-ttl
+spec:
+  ttlSecondsAfterFinished: 60  # Delete the WWR 60s after it finishes.
+  workflows:
+    - name: workflow-ttl

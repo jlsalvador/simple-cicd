@@ -1,0 +1,75 @@
+# Example: accessing the HTTP request data inside a job pod
+#
+# The operator mounts the triggering HTTP request as a Secret volume at
+# /var/run/secrets/kubernetes.io/request/ inside every cloned job pod.
+# All fields are decoded automatically by Kubernetes when mounting.
+#
+# Available files:
+#   body        – raw request body.
+#   headers     – JSON map of request headers.
+#   host        – Host header value.
+#   method      – HTTP method (GET, POST, ...).
+#   url         – full request URL.
+#   remoteAddr  – caller IP:port.
+#   timestamp   – Unix epoch (seconds) when the webhook was received.
+#
+# How to trigger with a JSON body:
+#   curl -X POST http://localhost:9000/example-request/workflowwebhook-request \
+#     -H "Content-Type: application/json" \
+#     -H "X-Git-Ref: refs/heads/main" \
+#     -d '{"repository":"my-app","commit":"abc123"}'
+#
+# What to observe:
+#   kubectl -n example-request logs -l simple-cicd.jlsalvador.online/wwr -c echo-request
+#   # Prints all request fields decoded from the mounted Secret.
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: example-request
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: job-echo-request
+  namespace: example-request
+spec:
+  suspend: true
+  backoffLimit: 0
+  template:
+    spec:
+      containers:
+        - name: echo-request
+          image: bash
+          command:
+            - sh
+            - -c
+            - |
+              echo "=== Incoming webhook request ==="
+              echo "Host:       $(cat /var/run/secrets/kubernetes.io/request/host)"
+              echo "Method:     $(cat /var/run/secrets/kubernetes.io/request/method)"
+              echo "URL:        $(cat /var/run/secrets/kubernetes.io/request/url)"
+              echo "RemoteAddr: $(cat /var/run/secrets/kubernetes.io/request/remoteAddr)"
+              echo "Timestamp:  $(cat /var/run/secrets/kubernetes.io/request/timestamp)"
+              echo "Headers:    $(cat /var/run/secrets/kubernetes.io/request/headers)"
+              echo "Body:       $(cat /var/run/secrets/kubernetes.io/request/body)"
+      restartPolicy: Never
+---
+apiVersion: simple-cicd.jlsalvador.online/v1alpha2
+kind: Workflow
+metadata:
+  name: workflow-request
+  namespace: example-request
+spec:
+  jobsToBeCloned:
+    - name: job-echo-request
+---
+apiVersion: simple-cicd.jlsalvador.online/v1alpha2
+kind: WorkflowWebhook
+metadata:
+  name: workflowwebhook-request
+  namespace: example-request
+spec:
+  ttlSecondsAfterFinished: 300
+  workflows:
+    - name: workflow-request

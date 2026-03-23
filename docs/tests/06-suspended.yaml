@@ -1,0 +1,94 @@
+# Example: suspend
+#
+# Two webhooks are shown:
+#
+#   workflowwebhook-suspended-hook  – the webhook itself is suspended.
+#     Any request creates a WWR that is immediately marked done (Suspended)
+#     without executing anything.
+#
+#   workflowwebhook-suspended-workflow – the webhook is active, but the
+#     workflow it references is suspended. The WWR is created and initialized,
+#     but no jobs are cloned and it finishes immediately with reason
+#     "NoWorkflows".
+#
+# How to toggle suspension at runtime (no redeploy needed):
+#   kubectl -n example-suspended patch workflowwebhook workflowwebhook-suspended-hook \
+#     --type=merge -p '{"spec":{"suspend":false}}'
+#
+#   kubectl -n example-suspended patch workflow workflow-suspended \
+#     --type=merge -p '{"spec":{"suspend":false}}'
+#
+# How to trigger:
+#   curl -X POST http://localhost:9000/example-suspended/workflowwebhook-suspended-hook
+#   curl -X POST http://localhost:9000/example-suspended/workflowwebhook-suspended-workflow
+#
+# What to observe:
+#   kubectl -n example-suspended get wwr
+#   # Both WWRs have Done=true immediately with no jobs created.
+#   kubectl -n example-suspended get wwr <name> -o jsonpath='{.status.conditions}'
+#   # First: reason Suspended. Second: reason NoWorkflows.
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: example-suspended
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: job-example
+  namespace: example-suspended
+spec:
+  suspend: true
+  backoffLimit: 0
+  template:
+    spec:
+      containers:
+        - name: work
+          image: bash
+          command: ["echo", "working"]
+      restartPolicy: Never
+---
+# This workflow is suspended: even if triggered it will be skipped.
+apiVersion: simple-cicd.jlsalvador.online/v1alpha2
+kind: Workflow
+metadata:
+  name: workflow-suspended
+  namespace: example-suspended
+spec:
+  suspend: true
+  jobsToBeCloned:
+    - name: job-example
+---
+# This workflow is active and is used by the second webhook.
+apiVersion: simple-cicd.jlsalvador.online/v1alpha2
+kind: Workflow
+metadata:
+  name: workflow-active
+  namespace: example-suspended
+spec:
+  jobsToBeCloned:
+    - name: job-example
+---
+# Webhook with suspend:true - WWR is marked done immediately (reason: Suspended).
+apiVersion: simple-cicd.jlsalvador.online/v1alpha2
+kind: WorkflowWebhook
+metadata:
+  name: workflowwebhook-suspended-hook
+  namespace: example-suspended
+spec:
+  suspend: true
+  ttlSecondsAfterFinished: 60
+  workflows:
+    - name: workflow-active
+---
+# Webhook is active but its workflow is suspended - no jobs cloned (reason: NoWorkflows).
+apiVersion: simple-cicd.jlsalvador.online/v1alpha2
+kind: WorkflowWebhook
+metadata:
+  name: workflowwebhook-suspended-workflow
+  namespace: example-suspended
+spec:
+  ttlSecondsAfterFinished: 60
+  workflows:
+    - name: workflow-suspended

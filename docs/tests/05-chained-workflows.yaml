@@ -1,0 +1,145 @@
+# Example: chained workflows with when conditions
+#
+# Pipeline shape:
+#
+#   [workflow-build] -> OnSuccess -> [workflow-deploy]
+#                    -> OnFailure -> [workflow-notify-failure]
+#                    -> Always    -> [workflow-cleanup]
+#
+# The build job randomly exits 0 or 1. Regardless of outcome, the cleanup
+# workflow always runs. On success, deploy runs. On failure, notify runs.
+#
+# How to trigger:
+#   curl -X POST http://localhost:9000/example-chain/workflowwebhook-chain
+#
+# What to observe:
+#   kubectl -n example-chain get wwr -w
+#   kubectl -n example-chain get jobs
+#   # Step 1: build job runs.
+#   # Step 2: depending on result, deploy or notify runs alongside cleanup.
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: example-chain
+---
+# Step 1: randomly succeeds or fails.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: job-build
+  namespace: example-chain
+spec:
+  suspend: true
+  backoffLimit: 0
+  template:
+    spec:
+      containers:
+        - name: build
+          image: bash
+          command: ["sh", "-c", "exit $$(($RANDOM % 2))"]
+      restartPolicy: Never
+---
+# Step 2a: runs only if build succeeded.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: job-deploy
+  namespace: example-chain
+spec:
+  suspend: true
+  backoffLimit: 0
+  template:
+    spec:
+      containers:
+        - name: deploy
+          image: bash
+          command: ["echo", "deploying..."]
+      restartPolicy: Never
+---
+# Step 2b: runs only if build failed.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: job-notify-failure
+  namespace: example-chain
+spec:
+  suspend: true
+  backoffLimit: 0
+  template:
+    spec:
+      containers:
+        - name: notify
+          image: bash
+          command: ["echo", "build failed - notifying team"]
+      restartPolicy: Never
+---
+# Step 2c: always runs regardless of build result.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: job-cleanup
+  namespace: example-chain
+spec:
+  suspend: true
+  backoffLimit: 0
+  template:
+    spec:
+      containers:
+        - name: cleanup
+          image: bash
+          command: ["echo", "cleaning up workspace"]
+      restartPolicy: Never
+---
+apiVersion: simple-cicd.jlsalvador.online/v1alpha2
+kind: Workflow
+metadata:
+  name: workflow-build
+  namespace: example-chain
+spec:
+  jobsToBeCloned:
+    - name: job-build
+  next:
+    - name: workflow-deploy
+      when: OnSuccess
+    - name: workflow-notify-failure
+      when: OnFailure
+    - name: workflow-cleanup
+      when: Always
+---
+apiVersion: simple-cicd.jlsalvador.online/v1alpha2
+kind: Workflow
+metadata:
+  name: workflow-deploy
+  namespace: example-chain
+spec:
+  jobsToBeCloned:
+    - name: job-deploy
+---
+apiVersion: simple-cicd.jlsalvador.online/v1alpha2
+kind: Workflow
+metadata:
+  name: workflow-notify-failure
+  namespace: example-chain
+spec:
+  jobsToBeCloned:
+    - name: job-notify-failure
+---
+apiVersion: simple-cicd.jlsalvador.online/v1alpha2
+kind: Workflow
+metadata:
+  name: workflow-cleanup
+  namespace: example-chain
+spec:
+  jobsToBeCloned:
+    - name: job-cleanup
+---
+apiVersion: simple-cicd.jlsalvador.online/v1alpha2
+kind: WorkflowWebhook
+metadata:
+  name: workflowwebhook-chain
+  namespace: example-chain
+spec:
+  ttlSecondsAfterFinished: 300
+  workflows:
+    - name: workflow-build

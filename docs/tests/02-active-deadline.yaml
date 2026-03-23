@@ -1,0 +1,56 @@
+# Example: activeDeadlineSeconds
+#
+# The WorkflowWebhook has activeDeadlineSeconds=30. The cloned job sleeps for
+# 120s, so it will never finish on its own within the deadline. The operator
+# marks the WWR done with reason "DeadlineExceeded" after 30s.
+#
+# Note: the operator marks the WWR done and kills the running job.
+#
+# How to trigger:
+#   curl -X POST http://localhost:9000/example-deadline/workflowwebhook-deadline
+#
+# What to observe:
+#   kubectl -n example-deadline get wwr -w
+#   # WWR appears, stays not-done for ~30s, then Done=true with
+#   # condition reason DeadlineExceeded.
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: example-deadline
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: job-slow
+  namespace: example-deadline
+spec:
+  suspend: true
+  backoffLimit: 0
+  template:
+    spec:
+      containers:
+        - name: slow
+          image: bash
+          command: ["sleep", "120"]
+      restartPolicy: Never
+---
+apiVersion: simple-cicd.jlsalvador.online/v1alpha2
+kind: Workflow
+metadata:
+  name: workflow-deadline
+  namespace: example-deadline
+spec:
+  jobsToBeCloned:
+    - name: job-slow
+---
+apiVersion: simple-cicd.jlsalvador.online/v1alpha2
+kind: WorkflowWebhook
+metadata:
+  name: workflowwebhook-deadline
+  namespace: example-deadline
+spec:
+  activeDeadlineSeconds: 30  # Mark the WWR done after 30s regardless of job state.
+  ttlSecondsAfterFinished: 120  # Clean up 2 min after deadline fires.
+  workflows:
+    - name: workflow-deadline

@@ -1,0 +1,54 @@
+# Example: ConcurrencyPolicy: Forbid
+#
+# While a WWR is still running, any new incoming request is immediately
+# marked done with reason "Forbidden" without executing any workflow.
+#
+# How to trigger:
+#   curl -X POST http://localhost:9000/example-forbid/workflowwebhook-forbid &
+#   curl -X POST http://localhost:9000/example-forbid/workflowwebhook-forbid
+#
+# What to observe:
+#   kubectl -n example-forbid get wwr
+#   # Two WWRs. The first has Done=false (job is sleeping).
+#   # The second has Done=true immediately (Forbidden).
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: example-forbid
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: job-slow
+  namespace: example-forbid
+spec:
+  suspend: true
+  backoffLimit: 0
+  template:
+    spec:
+      containers:
+        - name: slow
+          image: bash
+          command: ["sleep", "60"]
+      restartPolicy: Never
+---
+apiVersion: simple-cicd.jlsalvador.online/v1alpha2
+kind: Workflow
+metadata:
+  name: workflow-forbid
+  namespace: example-forbid
+spec:
+  jobsToBeCloned:
+    - name: job-slow
+---
+apiVersion: simple-cicd.jlsalvador.online/v1alpha2
+kind: WorkflowWebhook
+metadata:
+  name: workflowwebhook-forbid
+  namespace: example-forbid
+spec:
+  concurrencyPolicy: Forbid  # Drop new requests while one is still running.
+  ttlSecondsAfterFinished: 120
+  workflows:
+    - name: workflow-forbid

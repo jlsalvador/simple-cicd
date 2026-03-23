@@ -1,0 +1,153 @@
+# Example: parallel jobs within a single step
+#
+# A single workflow clones three jobs simultaneously. All three run in
+# parallel in step 1. The operator waits for all of them before advancing.
+# Because one job always fails, the OnAnyFailure next-workflow triggers
+# in step 2.
+#
+# Step 1 (parallel): job-unit-tests + job-lint + job-security-scan
+# Step 2 (conditional):
+#   - OnSuccess    -> workflow-publish (all three passed)
+#   - OnAnyFailure -> workflow-report  (at least one failed)
+#
+# How to trigger:
+#   curl -X POST http://localhost:9000/example-parallel/workflowwebhook-parallel
+#
+# What to observe:
+#   kubectl -n example-parallel get jobs -w
+#   # Three jobs start at the same time in step 1.
+#   kubectl -n example-parallel get wwr -w
+#   # Steps increments to 2 once all three finish.
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: example-parallel
+---
+# Always succeeds.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: job-unit-tests
+  namespace: example-parallel
+spec:
+  suspend: true
+  backoffLimit: 0
+  template:
+    spec:
+      containers:
+        - name: tests
+          image: bash
+          command: ["sh", "-c", "echo 'all tests passed'; sleep 5"]
+      restartPolicy: Never
+---
+# Always succeeds.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: job-lint
+  namespace: example-parallel
+spec:
+  suspend: true
+  backoffLimit: 0
+  template:
+    spec:
+      containers:
+        - name: lint
+          image: bash
+          command: ["sh", "-c", "echo 'lint clean'; sleep 3"]
+      restartPolicy: Never
+---
+# Always fails (simulates a security finding).
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: job-security-scan
+  namespace: example-parallel
+spec:
+  suspend: true
+  backoffLimit: 0
+  template:
+    spec:
+      containers:
+        - name: scan
+          image: bash
+          command: ["sh", "-c", "echo 'vulnerability found'; exit 1"]
+      restartPolicy: Never
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: job-publish
+  namespace: example-parallel
+spec:
+  suspend: true
+  backoffLimit: 0
+  template:
+    spec:
+      containers:
+        - name: publish
+          image: bash
+          command: ["echo", "publishing artifact"]
+      restartPolicy: Never
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: job-report
+  namespace: example-parallel
+spec:
+  suspend: true
+  backoffLimit: 0
+  template:
+    spec:
+      containers:
+        - name: report
+          image: bash
+          command: ["echo", "sending failure report"]
+      restartPolicy: Never
+---
+# Step 1: all three jobs run in parallel.
+apiVersion: simple-cicd.jlsalvador.online/v1alpha2
+kind: Workflow
+metadata:
+  name: workflow-ci
+  namespace: example-parallel
+spec:
+  jobsToBeCloned:
+    - name: job-unit-tests
+    - name: job-lint
+    - name: job-security-scan
+  next:
+    - name: workflow-publish
+      when: OnSuccess
+    - name: workflow-report
+      when: OnAnyFailure
+---
+apiVersion: simple-cicd.jlsalvador.online/v1alpha2
+kind: Workflow
+metadata:
+  name: workflow-publish
+  namespace: example-parallel
+spec:
+  jobsToBeCloned:
+    - name: job-publish
+---
+apiVersion: simple-cicd.jlsalvador.online/v1alpha2
+kind: Workflow
+metadata:
+  name: workflow-report
+  namespace: example-parallel
+spec:
+  jobsToBeCloned:
+    - name: job-report
+---
+apiVersion: simple-cicd.jlsalvador.online/v1alpha2
+kind: WorkflowWebhook
+metadata:
+  name: workflowwebhook-parallel
+  namespace: example-parallel
+spec:
+  ttlSecondsAfterFinished: 300
+  workflows:
+    - name: workflow-ci

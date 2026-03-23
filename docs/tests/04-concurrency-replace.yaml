@@ -1,0 +1,58 @@
+# Example: ConcurrencyPolicy: Replace
+#
+# When a new request arrives while a WWR is still running, the operator
+# deletes all currently running WWRs for this webhook and starts fresh
+# with the new one. Useful for "latest wins" CI pipelines (e.g. a push
+# to a branch should cancel the previous run for that branch).
+#
+# How to trigger:
+#   curl -X POST http://localhost:9000/example-replace/workflowwebhook-replace &
+#   curl -X POST http://localhost:9000/example-replace/workflowwebhook-replace
+#
+# What to observe:
+#   kubectl -n example-replace get wwr -w
+#   # First WWR appears and starts running. A few seconds later it
+#   # disappears and a second WWR takes its place.
+#   kubectl -n example-replace get jobs
+#   # Only jobs belonging to the second WWR remain.
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: example-replace
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: job-slow
+  namespace: example-replace
+spec:
+  suspend: true
+  backoffLimit: 0
+  template:
+    spec:
+      containers:
+        - name: slow
+          image: bash
+          command: ["sleep", "60"]
+      restartPolicy: Never
+---
+apiVersion: simple-cicd.jlsalvador.online/v1alpha2
+kind: Workflow
+metadata:
+  name: workflow-replace
+  namespace: example-replace
+spec:
+  jobsToBeCloned:
+    - name: job-slow
+---
+apiVersion: simple-cicd.jlsalvador.online/v1alpha2
+kind: WorkflowWebhook
+metadata:
+  name: workflowwebhook-replace
+  namespace: example-replace
+spec:
+  concurrencyPolicy: Replace  # Cancel running WWRs when a new request arrives.
+  ttlSecondsAfterFinished: 120
+  workflows:
+    - name: workflow-replace
