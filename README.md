@@ -29,6 +29,134 @@ kubectl apply -f https://github.com/jlsalvador/simple-cicd/releases/latest/downl
 
 ---
 
+## Example
+
+This example creates a workflow that runs a job, echoing the original HTTP
+request and returning a random exit code. On failure, it triggers a second
+workflow that echoes "ERROR".
+
+> [!CAUTION]
+> Job templates **must** have `spec.suspend: true`. Without it,
+> Kubernetes will run the Job immediately when it is created as a template,
+> before the operator has a chance to clone it. The operator sets
+> `spec.suspend: false` on each cloned copy automatically.
+
+```yaml
+# Job that randomly exits with code 0 or 1.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: job-example-random-exit
+  namespace: example
+spec:
+  suspend: true # Prevents Kubernetes from running this directly.
+  backoffLimit: 0
+  template:
+    spec:
+      containers:
+        - name: random-exit
+          image: bash
+          command: ["sh", "-c", "exit $$(($RANDOM % 2))"]
+        - name: echo-request
+          image: bash
+          command:
+            - sh
+            - -c
+            - |
+              echo "Host:       $(cat /var/run/secrets/kubernetes.io/request/host)"
+              echo "Headers:    $(cat /var/run/secrets/kubernetes.io/request/headers)"
+              echo "Method:     $(cat /var/run/secrets/kubernetes.io/request/method)"
+              echo "URL:        $(cat /var/run/secrets/kubernetes.io/request/url)"
+              echo "RemoteAddr: $(cat /var/run/secrets/kubernetes.io/request/remoteAddr)"
+              echo "Timestamp:  $(cat /var/run/secrets/kubernetes.io/request/timestamp)"
+              echo "Body:       $(cat /var/run/secrets/kubernetes.io/request/body)"
+      restartPolicy: Never # Do not re-run the pod if something fails.
+---
+# Job that echoes "ERROR".
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: job-example-error
+  namespace: example
+spec:
+  suspend: true
+  template:
+    spec:
+      containers:
+        - name: error
+          image: bash
+          command: ["echo", "ERROR"]
+      restartPolicy: Never
+---
+# Workflow triggered on failure: runs job-example-error.
+apiVersion: simple-cicd.jlsalvador.online/v1alpha2
+kind: Workflow
+metadata:
+  name: workflow-example-on-failure
+  namespace: example
+spec:
+  jobsToBeCloned:
+    - name: job-example-error
+---
+# Main workflow: runs job-example-random-exit, then workflow-example-on-failure on any failure.
+apiVersion: simple-cicd.jlsalvador.online/v1alpha2
+kind: Workflow
+metadata:
+  name: workflow-example
+  namespace: example
+spec:
+  jobsToBeCloned:
+    - name: job-example-random-exit
+  next:
+    - name: workflow-example-on-failure
+      when: OnAnyFailure
+---
+# WorkflowWebhook: listens on /example/workflowwebhook-example.
+apiVersion: simple-cicd.jlsalvador.online/v1alpha2
+kind: WorkflowWebhook
+metadata:
+  name: workflowwebhook-example
+  namespace: example
+spec:
+  workflows:
+    - name: workflow-example
+  ttlSecondsAfterFinished: 3600 # Clean up WWRs after 1 hour.
+```
+
+Trigger the WorkflowWebhook via `kubectl port-forward`:
+
+```sh
+kubectl -n simple-cicd port-forward svc/operator 9000:9000 &
+curl -XPOST http://localhost:9000/example/workflowwebhook-example
+```
+
+> [!TIP]
+> You can also reach the operator directly from within the cluster or expose it
+> through any Service. Remember to set up proper authentication & authorization.
+
+---
+
+## Request Data in Jobs
+
+Every Job cloned by the operator has the original HTTP request data mounted as
+read-only files at `/var/run/secrets/kubernetes.io/request/` inside all its
+containers. The data is stored in a Kubernetes `Secret` (named
+`{webhookName}-request-{random}` in the WWR's namespace) and either mounted
+directly for same-namespace Jobs or mirrored into the Job's own namespace for
+cross-namespace Jobs.
+
+| File         | Content                                        |
+| ------------ | ---------------------------------------------- |
+| `body`       | Request body                                   |
+| `headers`    | All headers serialised as JSON                 |
+| `host`       | Host header value                              |
+| `method`     | HTTP method (`GET`, `POST`, …)                 |
+| `url`        | Full request URL                               |
+| `remoteAddr` | Client IP and port (e.g. `10.0.0.5:54321`)     |
+| `timestamp`  | Time the request was received (UNIX timestamp) |
+
+---
+
 ## How It Works
 
 Simple CI/CD follows the Kubernetes [Operator pattern].
@@ -213,134 +341,6 @@ condition reflects the final outcome:
 ```sh
 kubectl get wwr -n example -o jsonpath='{.items[-1].status.conditions[-1]}'
 ```
-
----
-
-## Request Data in Jobs
-
-Every Job cloned by the operator has the original HTTP request data mounted as
-read-only files at `/var/run/secrets/kubernetes.io/request/` inside all its
-containers. The data is stored in a Kubernetes `Secret` (named
-`{webhookName}-request-{random}` in the WWR's namespace) and either mounted
-directly for same-namespace Jobs or mirrored into the Job's own namespace for
-cross-namespace Jobs.
-
-| File         | Content                                        |
-| ------------ | ---------------------------------------------- |
-| `body`       | Request body                                   |
-| `headers`    | All headers serialised as JSON                 |
-| `host`       | Host header value                              |
-| `method`     | HTTP method (`GET`, `POST`, …)                 |
-| `url`        | Full request URL                               |
-| `remoteAddr` | Client IP and port (e.g. `10.0.0.5:54321`)     |
-| `timestamp`  | Time the request was received (UNIX timestamp) |
-
-> [!CAUTION]
-> Job templates **must** have `spec.suspend: true`. Without it,
-> Kubernetes will run the Job immediately when it is created as a template,
-> before the operator has a chance to clone it. The operator sets
-> `spec.suspend: false` on each cloned copy automatically.
-
----
-
-## Example
-
-This example creates a workflow that runs a job, echoing the original HTTP
-request and returning a random exit code. On failure, it triggers a second
-workflow that echoes "ERROR".
-
-```yaml
-# Job that randomly exits with code 0 or 1.
-apiVersion: batch/v1
-kind: Job
-metadata:
-  name: job-example-random-exit
-  namespace: example
-spec:
-  suspend: true # Prevents Kubernetes from running this directly.
-  backoffLimit: 0
-  template:
-    spec:
-      containers:
-        - name: random-exit
-          image: bash
-          command: ["sh", "-c", "exit $$(($RANDOM % 2))"]
-        - name: echo-request
-          image: bash
-          command:
-            - sh
-            - -c
-            - |
-              echo "Host:       $(cat /var/run/secrets/kubernetes.io/request/host)"
-              echo "Headers:    $(cat /var/run/secrets/kubernetes.io/request/headers)"
-              echo "Method:     $(cat /var/run/secrets/kubernetes.io/request/method)"
-              echo "URL:        $(cat /var/run/secrets/kubernetes.io/request/url)"
-              echo "RemoteAddr: $(cat /var/run/secrets/kubernetes.io/request/remoteAddr)"
-              echo "Timestamp:  $(cat /var/run/secrets/kubernetes.io/request/timestamp)"
-              echo "Body:       $(cat /var/run/secrets/kubernetes.io/request/body)"
-      restartPolicy: Never # Do not re-run the pod if something fails.
----
-# Job that echoes "ERROR".
-apiVersion: batch/v1
-kind: Job
-metadata:
-  name: job-example-error
-  namespace: example
-spec:
-  suspend: true
-  template:
-    spec:
-      containers:
-        - name: error
-          image: bash
-          command: ["echo", "ERROR"]
-      restartPolicy: Never
----
-# Workflow triggered on failure: runs job-example-error.
-apiVersion: simple-cicd.jlsalvador.online/v1alpha2
-kind: Workflow
-metadata:
-  name: workflow-example-on-failure
-  namespace: example
-spec:
-  jobsToBeCloned:
-    - name: job-example-error
----
-# Main workflow: runs job-example-random-exit, then workflow-example-on-failure on any failure.
-apiVersion: simple-cicd.jlsalvador.online/v1alpha2
-kind: Workflow
-metadata:
-  name: workflow-example
-  namespace: example
-spec:
-  jobsToBeCloned:
-    - name: job-example-random-exit
-  next:
-    - name: workflow-example-on-failure
-      when: OnAnyFailure
----
-# WorkflowWebhook: listens on /example/workflowwebhook-example.
-apiVersion: simple-cicd.jlsalvador.online/v1alpha2
-kind: WorkflowWebhook
-metadata:
-  name: workflowwebhook-example
-  namespace: example
-spec:
-  workflows:
-    - name: workflow-example
-  ttlSecondsAfterFinished: 3600 # Clean up WWRs after 1 hour.
-```
-
-Trigger the WorkflowWebhook via `kubectl port-forward`:
-
-```sh
-kubectl -n simple-cicd port-forward svc/operator 9000:9000 &
-curl -XPOST http://localhost:9000/example/workflowwebhook-example
-```
-
-> [!TIP]
-> You can also reach the operator directly from within the cluster or expose it
-> through any Service. Remember to set up proper authentication & authorization.
 
 ---
 
