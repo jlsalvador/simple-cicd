@@ -61,7 +61,7 @@ flowchart TD
 
 ### Reconciliation loop
 
-1. A webhook HTTP request arrives → the operator creates a
+1. A webhook HTTP request arrives -> the operator creates a
    `WorkflowWebhookRequest` (WWR) and a `Secret` containing the request data.
 2. The reconciler reads the WWR, resolves the referenced `WorkflowWebhook` and
    its `Workflow` list.

@@ -264,7 +264,7 @@ func (f *fakeClient) CreateJobRaw(namespace string, job map[string]any) (k8s.Cre
 
 	f.liveJobs[f.key(namespace, name)] = &types.Job{
 		Metadata: types.ObjectMeta{Namespace: namespace, Name: name, UID: uid},
-		// Starts as active/running
+		// Starts as active/running.
 		Status: types.JobStatus{Active: 1},
 	}
 	return k8s.CreatedResource{Name: name, UID: uid}, nil

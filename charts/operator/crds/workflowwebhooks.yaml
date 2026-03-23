@@ -22,6 +22,11 @@ spec:
       jsonPath: .spec.concurrencyPolicy
       name: Concurrency
       type: string
+    - description: Seconds after completion before the WorkflowWebhookRequest is deleted. Empty means never.
+      jsonPath: .spec.ttlSecondsAfterFinished
+      name: TTL
+      type: integer
+      priority: 1
     name: v1alpha2
     schema:
       openAPIV3Schema:
@@ -61,6 +66,18 @@ spec:
                   done without executing any Workflow. Defaults to false.
                 type: boolean
                 default: false
+              ttlSecondsAfterFinished:
+                description: >
+                  If set, every WorkflowWebhookRequest created from this
+                  WorkflowWebhook will be automatically deleted this many
+                  seconds after it completes (successfully or not).
+                  0 means delete immediately on completion.
+                  Omitting this field disables automatic deletion.
+                  The value is copied into the WorkflowWebhookRequest spec at
+                  creation time and is not affected by later changes to this field.
+                type: integer
+                format: int32
+                minimum: 0
               workflows:
                 description: >
                   Ordered list of Workflows to execute when a request arrives.

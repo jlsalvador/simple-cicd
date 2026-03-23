@@ -329,7 +329,7 @@ func (c *Client) CreateSecretForJob(
 				},
 			},
 		},
-		// Values are already base64-encoded by the handler.
+		// Values are already base64-encoded by the webhook handler.
 		"data": map[string]string{
 			"body":       req.Body,
 			"headers":    req.Headers,

@@ -260,7 +260,7 @@ func TestReconcile_SingleJobSuccess(t *testing.T) {
 
 	r := NewReconciler(fc)
 
-	// --- Tick 1: initialize → jobs cloned ---
+	// --- Tick 1: initialize -> jobs cloned ---
 	if err := r.reconcileWWR(wwr); err != nil {
 		t.Fatalf("tick 1 error: %v", err)
 	}
@@ -274,7 +274,7 @@ func TestReconcile_SingleJobSuccess(t *testing.T) {
 		t.Errorf("expected 1 secret created, got %d", len(fc.createdSecrets))
 	}
 
-	// --- Tick 2: job still running → no change ---
+	// --- Tick 2: job still running -> no change ---
 	if err := r.reconcileWWR(wwr); err != nil {
 		t.Fatalf("tick 2 error: %v", err)
 	}
@@ -286,7 +286,7 @@ func TestReconcile_SingleJobSuccess(t *testing.T) {
 	jobRef := wwr.Status.CurrentJobs[0]
 	fc.setJobStatus(jobRef.Namespace, jobRef.Name, succeededStatus())
 
-	// --- Tick 3: job done, no next workflows → mark done ---
+	// --- Tick 3: job done, no next workflows -> mark done ---
 	if err := r.reconcileWWR(wwr); err != nil {
 		t.Fatalf("tick 3 error: %v", err)
 	}
@@ -481,7 +481,7 @@ func TestReconcile_CrossNamespace(t *testing.T) {
 	wwr := makeWWR("ns-a", "wwr-1", "hook")
 	wwr.Metadata.Finalizers = []string{types.FinalizerCleanup}
 	fc.addWWR(wwr)
-	// Webhook in ns-a, workflow in ns-b, job template in ns-b
+	// Webhook in ns-a, workflow in ns-b, job template in ns-b.
 	fc.addWebhook(makeWebhook("ns-a", "hook", []types.ResourceName{refNS("ns-b", "wf-remote")}))
 	fc.addWorkflow(makeWorkflow("ns-b", "wf-remote", []types.ResourceName{ref("job-tmpl")}))
 	fc.addJobTemplate("ns-b", "job-tmpl", minimalJobRaw("job-tmpl"))
@@ -494,12 +494,12 @@ func TestReconcile_CrossNamespace(t *testing.T) {
 	if len(wwr.Status.CurrentJobs) != 1 {
 		t.Fatalf("expected 1 current job, got %d", len(wwr.Status.CurrentJobs))
 	}
-	// Job should live in ns-b
+	// Job should live in ns-b.
 	jobRef := wwr.Status.CurrentJobs[0]
 	if jobRef.Namespace != "ns-b" {
 		t.Errorf("expected job in ns-b, got %q", jobRef.Namespace)
 	}
-	// AllJobs must be populated for finalizer cleanup
+	// AllJobs must be populated for finalizer cleanup.
 	if len(wwr.Status.AllJobs) != 1 {
 		t.Errorf("expected AllJobs to have 1 entry")
 	}
@@ -563,13 +563,13 @@ func TestReconcile_CrossNamespace_NextWorkflow(t *testing.T) {
 func TestReconcile_ConcurrencyForbid(t *testing.T) {
 	fc := newFakeClient(t)
 
-	// An already-running WWR
+	// An already-running WWR.
 	running := makeWWR("default", "wwr-old", "hook")
 	running.Metadata.Finalizers = []string{types.FinalizerCleanup}
 	running.Status.Steps = 1 // already initialized, not done
 	fc.addWWR(running)
 
-	// New WWR that should be rejected
+	// New WWR that should be rejected.
 	wwr := makeWWR("default", "wwr-new", "hook")
 	wwr.Metadata.Finalizers = []string{types.FinalizerCleanup}
 	fc.addWWR(wwr)
@@ -610,11 +610,11 @@ func TestReconcile_ConcurrencyReplace(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// Old WWR must have been deleted
+	// Old WWR must have been deleted.
 	if len(fc.deleteWWRCalls) != 1 || fc.deleteWWRCalls[0] != "default/wwr-old" {
 		t.Errorf("expected old WWR to be deleted, deleteWWRCalls=%v", fc.deleteWWRCalls)
 	}
-	// New WWR should have proceeded
+	// New WWR should have proceeded.
 	if wwr.Status.Done {
 		t.Errorf("new WWR should not be done after Replace; it should have started")
 	}
@@ -635,7 +635,7 @@ func TestReconcile_MultipleJobs_MixedResults(t *testing.T) {
 	fc.addWebhook(makeWebhook("default", "hook", []types.ResourceName{ref("wf-a")}))
 	fc.addWorkflow(makeWorkflow("default", "wf-a",
 		[]types.ResourceName{ref("job-ok"), ref("job-fail")},
-		// OnAnyFailure chains to a recovery workflow
+		// OnAnyFailure chains to a recovery workflow.
 		types.NextWorkflow{Name: "wf-recovery", When: types.WhenOnAnyFailure},
 	))
 	fc.addWorkflow(makeWorkflow("default", "wf-recovery", []types.ResourceName{ref("job-recovery")}))
@@ -651,14 +651,14 @@ func TestReconcile_MultipleJobs_MixedResults(t *testing.T) {
 		t.Fatalf("expected 2 jobs, got %d", len(wwr.Status.CurrentJobs))
 	}
 
-	// One succeeds, one fails
+	// One succeeds, one fails.
 	fc.setJobStatus(wwr.Status.CurrentJobs[0].Namespace, wwr.Status.CurrentJobs[0].Name, succeededStatus())
 	fc.setJobStatus(wwr.Status.CurrentJobs[1].Namespace, wwr.Status.CurrentJobs[1].Name, failedStatus())
 
 	if err := r.reconcileWWR(wwr); err != nil {
 		t.Fatal(err)
 	}
-	// OnAnyFailure should have triggered recovery
+	// OnAnyFailure should have triggered recovery.
 	if wwr.Status.Done {
 		t.Errorf("expected recovery workflow to run, not done yet")
 	}
@@ -723,7 +723,7 @@ func TestReconcile_MissingJobTreatedAsFailed(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Delete the live job to simulate it disappearing
+	// Delete the live job to simulate it disappearing.
 	jobRef := wwr.Status.CurrentJobs[0]
 	delete(fc.liveJobs, jobRef.Namespace+"/"+jobRef.Name)
 
@@ -736,7 +736,7 @@ func TestReconcile_MissingJobTreatedAsFailed(t *testing.T) {
 }
 
 // --------------------------------------------------------------------------
-// Done WWR is skipped on subsequent reconcile
+// Done WWR with no TTL: checkTTL is a no-op -> no extra UpdateWWRStatus call
 // --------------------------------------------------------------------------
 
 func TestReconcile_DoneWWRIsSkipped(t *testing.T) {
@@ -752,7 +752,79 @@ func TestReconcile_DoneWWRIsSkipped(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if fc.updateStatusCalls.Load() != initialUpdateCalls {
-		t.Errorf("UpdateWWRStatus should not be called for a done WWR")
+		t.Errorf("UpdateWWRStatus should not be called for a done WWR with no TTL")
+	}
+	if len(fc.deleteWWRCalls) != 0 {
+		t.Errorf("DeleteWWR should not be called when TTL is not set")
+	}
+}
+
+// --------------------------------------------------------------------------
+// TTL: WWR is deleted after TTL seconds have elapsed
+// --------------------------------------------------------------------------
+
+func TestReconcile_TTLExpired(t *testing.T) {
+	fc := newFakeClient(t)
+	wwr := makeWWR("default", "wwr-ttl", "hook")
+	wwr.Metadata.Finalizers = []string{types.FinalizerCleanup}
+
+	ttl := int32(60)
+	wwr.Spec.TTLSecondsAfterFinished = &ttl
+	wwr.Status.Done = true
+	// Set CompletionTime well in the past so TTL is already exceeded.
+	past := time.Now().Add(-2 * time.Minute)
+	wwr.Status.CompletionTime = &past
+	fc.addWWR(wwr)
+
+	r := NewReconciler(fc)
+	if err := r.reconcileWWR(wwr); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(fc.deleteWWRCalls) != 1 || fc.deleteWWRCalls[0] != "default/wwr-ttl" {
+		t.Errorf("expected WWR to be deleted after TTL expiry, deleteWWRCalls=%v", fc.deleteWWRCalls)
+	}
+}
+
+func TestReconcile_TTLNotYetExpired(t *testing.T) {
+	fc := newFakeClient(t)
+	wwr := makeWWR("default", "wwr-ttl", "hook")
+	wwr.Metadata.Finalizers = []string{types.FinalizerCleanup}
+
+	ttl := int32(3600) // 1 hour.
+	wwr.Spec.TTLSecondsAfterFinished = &ttl
+	wwr.Status.Done = true
+	// CompletionTime just now -> TTL not yet exceeded.
+	now := time.Now()
+	wwr.Status.CompletionTime = &now
+	fc.addWWR(wwr)
+
+	r := NewReconciler(fc)
+	if err := r.reconcileWWR(wwr); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(fc.deleteWWRCalls) != 0 {
+		t.Errorf("expected WWR not to be deleted before TTL expiry, deleteWWRCalls=%v", fc.deleteWWRCalls)
+	}
+}
+
+func TestReconcile_TTLZero(t *testing.T) {
+	fc := newFakeClient(t)
+	wwr := makeWWR("default", "wwr-ttl-zero", "hook")
+	wwr.Metadata.Finalizers = []string{types.FinalizerCleanup}
+
+	ttl := int32(0) // delete immediately
+	wwr.Spec.TTLSecondsAfterFinished = &ttl
+	wwr.Status.Done = true
+	past := time.Now().Add(-1 * time.Second)
+	wwr.Status.CompletionTime = &past
+	fc.addWWR(wwr)
+
+	r := NewReconciler(fc)
+	if err := r.reconcileWWR(wwr); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(fc.deleteWWRCalls) != 1 {
+		t.Errorf("expected immediate deletion with TTL=0, deleteWWRCalls=%v", fc.deleteWWRCalls)
 	}
 }
 

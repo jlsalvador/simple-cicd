@@ -106,6 +106,12 @@ type WorkflowWebhookSpec struct {
 	ConcurrencyPolicy string         `json:"concurrencyPolicy,omitempty"`
 	Suspend           bool           `json:"suspend,omitempty"`
 	Workflows         []ResourceName `json:"workflows"`
+
+	// TTLSecondsAfterFinished, if set, is inherited by every WWR created from
+	// this WorkflowWebhook and causes the WWR to be automatically deleted that
+	// many seconds after it completes. 0 means delete immediately on completion.
+	// Omitting the field (nil) disables automatic deletion.
+	TTLSecondsAfterFinished *int32 `json:"ttlSecondsAfterFinished,omitempty"`
 }
 
 // --------------------------------------------------------------------------
@@ -148,6 +154,12 @@ type WebhookRequestData struct {
 type WorkflowWebhookRequestSpec struct {
 	WorkflowWebhook ResourceName       `json:"workflowWebhook"`
 	Request         WebhookRequestData `json:"request"`
+
+	// TTLSecondsAfterFinished, if set, causes this WWR to be automatically
+	// deleted the given number of seconds after it completes. Inherited from
+	// WorkflowWebhookSpec.TTLSecondsAfterFinished at creation time.
+	// 0 means delete immediately; nil disables automatic deletion.
+	TTLSecondsAfterFinished *int32 `json:"ttlSecondsAfterFinished,omitempty"`
 }
 
 // WorkflowWebhookRequestStatus holds the observed state of a WWR.

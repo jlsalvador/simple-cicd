@@ -109,6 +109,17 @@ spec:
                 - timestamp
                 - url
                 type: object
+              ttlSecondsAfterFinished:
+                description: >
+                  If set, this WorkflowWebhookRequest will be automatically
+                  deleted this many seconds after it completes.
+                  0 means delete immediately on completion.
+                  Omitting this field disables automatic deletion.
+                  Inherited from WorkflowWebhookSpec.ttlSecondsAfterFinished
+                  at creation time; not updated if the WorkflowWebhook changes.
+                type: integer
+                format: int32
+                minimum: 0
               workflowWebhook:
                 description: >
                   Reference to the WorkflowWebhook that was triggered. The

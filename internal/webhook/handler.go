@@ -59,9 +59,12 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// Verify the WorkflowWebhook exists before doing anything else.
 	// Returning 404 here avoids creating orphaned WWRs for unknown webhooks.
-	if _, err := h.client.GetWorkflowWebhook(namespace, webhookName); err != nil {
+	webhook, err := h.client.GetWorkflowWebhook(namespace, webhookName)
+	if err != nil {
 		log.Printf("[webhook] WorkflowWebhook %s/%s not found: %v", namespace, webhookName, err)
-		http.Error(w, fmt.Sprintf("WorkflowWebhook %q not found in namespace %q", webhookName, namespace), http.StatusNotFound)
+		http.Error(w,
+			fmt.Sprintf("WorkflowWebhook %q not found in namespace %q", webhookName, namespace),
+			http.StatusNotFound)
 		return
 	}
 
@@ -94,8 +97,9 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			},
 		},
 		Spec: types.WorkflowWebhookRequestSpec{
-			WorkflowWebhook: types.ResourceName{Name: webhookName},
-			Request:         requestData,
+			WorkflowWebhook:         types.ResourceName{Name: webhookName},
+			Request:                 requestData,
+			TTLSecondsAfterFinished: webhook.Spec.TTLSecondsAfterFinished,
 		},
 	}
 
@@ -105,8 +109,10 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "failed to create WorkflowWebhookRequest", http.StatusInternalServerError)
 		return
 	}
-	log.Printf("[webhook] created WWR %s/%s for webhook %s/%s",
-		namespace, created.Metadata.Name, namespace, webhookName)
+	log.Printf("[webhook] created WWR %s/%s (TTL %s) for webhook %s/%s",
+		namespace, created.Metadata.Name,
+		formatTTL(webhook.Spec.TTLSecondsAfterFinished),
+		namespace, webhookName)
 
 	// Wake the reconciler immediately instead of waiting for the next tick.
 	h.triggerFn()
@@ -124,4 +130,12 @@ func parsePath(urlPath string) (namespace, webhookName string, err error) {
 		return "", "", fmt.Errorf("invalid path %q: expected /{namespace}/{webhookName}", urlPath)
 	}
 	return parts[0], parts[1], nil
+}
+
+// formatTTL returns a human-readable TTL string for logging.
+func formatTTL(ttl *int32) string {
+	if ttl == nil {
+		return "none"
+	}
+	return fmt.Sprintf("%ds", *ttl)
 }

@@ -80,7 +80,8 @@ func (r *Reconciler) reconcileAll() {
 //     finalizer and return.
 //  2. If the finalizer is not yet present, add it and return (the next tick
 //     will pick up the updated object).
-//  3. Normal processing: initialize on first sight, otherwise check progress.
+//  3. If the WWR is done, check whether its TTL has expired and delete it if so.
+//  4. Normal processing: initialize on first sight, otherwise check progress.
 func (r *Reconciler) reconcileWWR(wwr *types.WorkflowWebhookRequest) error {
 	// 1. Deletion path.
 	if wwr.Metadata.DeletionTimestamp != nil {
@@ -92,10 +93,12 @@ func (r *Reconciler) reconcileWWR(wwr *types.WorkflowWebhookRequest) error {
 		return r.addFinalizer(wwr)
 	}
 
-	// 3. Normal processing.
+	// 3. TTL expiry check for completed WWRs.
 	if wwr.Status.Done {
-		return nil
+		return r.checkTTL(wwr)
 	}
+
+	// 4. Normal processing.
 	if wwr.Status.Steps == 0 {
 		return r.initialize(wwr)
 	}

@@ -265,7 +265,7 @@ func TestHandler_ResponseContainsWWRName(t *testing.T) {
 }
 
 // --------------------------------------------------------------------------
-// ServeHTTP: WorkflowWebhook does not exist → 404, no WWR created
+// ServeHTTP: WorkflowWebhook does not exist → 404, no WWR or secret created
 // --------------------------------------------------------------------------
 
 func TestHandler_WebhookNotFound(t *testing.T) {
@@ -285,6 +285,52 @@ func TestHandler_WebhookNotFound(t *testing.T) {
 	}
 	if triggered {
 		t.Errorf("expected triggerFn not to be called")
+	}
+}
+
+// --------------------------------------------------------------------------
+// TTL propagation: value from WorkflowWebhook is copied to WWR spec
+// --------------------------------------------------------------------------
+
+func TestHandler_TTLPropagatedToWWR(t *testing.T) {
+	ttl := int32(300)
+	fc := &handlerFakeClient{webhookTTL: &ttl}
+	h := NewHandler(fc, func() {})
+
+	req := httptest.NewRequest(http.MethodPost, "/default/my-hook", nil)
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d", rr.Code)
+	}
+	if len(fc.createdWWRs) != 1 {
+		t.Fatalf("expected 1 WWR, got %d", len(fc.createdWWRs))
+	}
+	wwr := fc.createdWWRs[0]
+	if wwr.Spec.TTLSecondsAfterFinished == nil {
+		t.Fatalf("expected TTLSecondsAfterFinished to be set on the WWR")
+	}
+	if *wwr.Spec.TTLSecondsAfterFinished != ttl {
+		t.Errorf("expected TTL=%d, got %d", ttl, *wwr.Spec.TTLSecondsAfterFinished)
+	}
+}
+
+func TestHandler_NoTTLWhenWebhookHasNone(t *testing.T) {
+	fc := &handlerFakeClient{} // webhookTTL is nil
+	h := NewHandler(fc, func() {})
+
+	req := httptest.NewRequest(http.MethodPost, "/default/my-hook", nil)
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d", rr.Code)
+	}
+	wwr := fc.createdWWRs[0]
+	if wwr.Spec.TTLSecondsAfterFinished != nil {
+		t.Errorf("expected no TTL on WWR when webhook has none, got %d",
+			*wwr.Spec.TTLSecondsAfterFinished)
 	}
 }
 

@@ -345,8 +345,7 @@ func generateSecretName(wwrName string) string {
 		}
 		suffix[i] = alphabet[n.Int64()]
 	}
-	// Kubernetes names are capped at 253 chars; truncate wwrName if necessary
-	// so the result never exceeds that limit.
+	// Kubernetes names are capped at 253 chars.
 	maxWWRLen := 253 - len("-request-") - suffixLen
 	if len(wwrName) > maxWWRLen {
 		wwrName = wwrName[:maxWWRLen]
@@ -369,6 +368,26 @@ func (r *Reconciler) markDone(wwr *types.WorkflowWebhookRequest, reason, message
 		Type:               "Done",
 	})
 	return r.client.UpdateWWRStatus(wwr)
+}
+
+// checkTTL deletes the WWR if its TTLSecondsAfterFinished has elapsed since
+// completion. The WWR must already be done when this is called.
+func (r *Reconciler) checkTTL(wwr *types.WorkflowWebhookRequest) error {
+	ttl := wwr.Spec.TTLSecondsAfterFinished
+	if ttl == nil {
+		return nil // no TTL configured.
+	}
+	if wwr.Status.CompletionTime == nil {
+		return nil // done but no completion timestamp; skip to be safe.
+	}
+	elapsed := time.Since(*wwr.Status.CompletionTime)
+	ttlDur := time.Duration(*ttl) * time.Second
+	if elapsed < ttlDur {
+		return nil // TTL not yet expired.
+	}
+	log.Printf("[reconciler] %s/%s: TTL of %ds expired (completed %s ago) - deleting",
+		wwr.Metadata.Namespace, wwr.Metadata.Name, *ttl, elapsed.Round(time.Second))
+	return r.client.DeleteWWR(wwr.Metadata.Namespace, wwr.Metadata.Name)
 }
 
 // runningWWRsForWebhook returns all non-done WWRs in namespace that reference
