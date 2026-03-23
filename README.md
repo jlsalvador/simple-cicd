@@ -61,12 +61,14 @@ flowchart TD
 
 ### Reconciliation loop
 
-1. A webhook HTTP request arrives -> the operator creates a
-   `WorkflowWebhookRequest` (WWR) and a `Secret` containing the request data.
+1. A webhook HTTP request arrives. The operator creates a `Secret` containing
+   the request data and a `WorkflowWebhookRequest` (WWR) referencing it.
 2. The reconciler reads the WWR, resolves the referenced `WorkflowWebhook` and
    its `Workflow` list.
-3. For each active Workflow, referenced Jobs are cloned into the WWR namespace
-   with the request Secret mounted.
+3. For each active Workflow, referenced Jobs are cloned. Jobs in the same
+   namespace as the WWR mount the request Secret directly. Jobs in other
+   namespaces receive a per-job mirrored copy of the Secret, owned by the Job
+   and automatically garbage-collected when the Job is deleted.
 4. The reconciler polls cloned Jobs until all finish, then evaluates `when`
    conditions to determine which next Workflows to trigger.
 5. Steps 3-4 repeat until no further Workflows remain, at which point the WWR
@@ -76,21 +78,19 @@ flowchart TD
 
 ```mermaid
 sequenceDiagram
-  participant User
-  participant Ingress as Ingress Controller
+  participant Client
   participant Operator as Simple CI/CD Operator
-  participant Pod1 as "Random Exit" Pod
-  participant Pod2 as "Error Handling" Pod
+  participant Step1 as Step 1 Pod(s)
+  participant Step2 as Step 2 Pod(s)
 
-  User->>Ingress: HTTP POST /simple-cicd/workflowwebhook-example
-  Ingress->>Operator: HTTP POST
+  Client->>Operator: HTTP POST /{namespace}/{webhookName}
   Operator->>Operator: Create request Secret + WorkflowWebhookRequest
-  Operator->>Pod1: Clone and run "random-exit" Job
-  Pod1-->>Operator: Exit status 0 or 1
+  Operator->>Step1: Clone and run Workflow step 1 Job(s)
+  Step1-->>Operator: Exit status
 
-  alt Exit status = 1 (failure)
-    Operator->>Pod2: Clone and run "error-handling" Job
-    Pod2-->>Operator: Done
+  alt next Workflow condition met
+    Operator->>Step2: Clone and run Workflow step 2 Job(s)
+    Step2-->>Operator: Exit status
   end
 
   Operator->>Operator: Mark WorkflowWebhookRequest as done
@@ -114,7 +114,7 @@ metadata:
 spec:
   jobsToBeCloned:
     - name: my-job
-      namespace: example # The same as the Workflow's namespace by default.
+      namespace: example # Defaults to the Workflow's own namespace when omitted.
   next:
     - name: my-next-workflow
       when: OnAnyFailure # OnSuccess | OnAnySuccess | OnFailure | OnAnyFailure | Always
@@ -123,7 +123,10 @@ spec:
 
 ### WorkflowWebhook
 
-Binds an HTTP path to one or more Workflows and controls concurrency.
+Binds an HTTP path to one or more Workflows and controls concurrency and
+lifecycle policies. All policy fields are copied into each
+`WorkflowWebhookRequest` at creation time and are not affected by later changes
+to the `WorkflowWebhook`.
 
 ```yaml
 apiVersion: simple-cicd.jlsalvador.online/v1alpha2
@@ -134,18 +137,25 @@ metadata:
 spec:
   workflows:
     - name: my-workflow
-      namespace: example # The same as the WorkflowWebhook's namespace by default.
+      namespace: example   # Defaults to the WorkflowWebhook's own namespace when omitted.
   concurrencyPolicy: Allow # Allow | Forbid | Replace
   suspend: false
+  ttlSecondsAfterFinished: 3600 # Delete the WWR 1 hour after it finishes. Omit to keep it forever.
+  activeDeadlineSeconds: 1800   # Mark the WWR done after 30 min if still running. Omit to disable.
 ```
 
 #### Concurrency policies
 
-| Policy    | Behaviour                                         |
-| --------- | ------------------------------------------------- |
-| `Allow`   | Multiple WWRs can run simultaneously (default)    |
-| `Forbid`  | Rejects new requests while a WWR is still running |
-| `Replace` | Deletes any running WWR and starts a fresh one    |
+| Policy    | Behaviour                                       |
+| --------- | ----------------------------------------------- |
+| `Allow`   | Multiple WWRs can run simultaneously (default). |
+| `Forbid`  | Creates the WWR without executing any Workflow. |
+| `Replace` | Deletes any running WWR and starts a fresh one. |
+
+> **ℹ️ Note:**
+> With `Forbid`, the HTTP response is still `202 Accepted`. The WWR
+> is created and immediately marked done. Inspect `status.conditions` to
+> determine whether execution was actually skipped.
 
 #### `when` conditions
 
@@ -156,6 +166,23 @@ spec:
 | `OnFailure`    | All Jobs in the step failed              |
 | `OnAnyFailure` | At least one Job failed                  |
 | `Always`       | Always trigger regardless of outcome     |
+
+#### `ttlSecondsAfterFinished`
+
+When set, the operator automatically deletes the WWR the specified number of
+seconds after it completes. `0` means delete immediately on completion. Omitting
+the field keeps the WWR indefinitely.
+
+#### `activeDeadlineSeconds`
+
+When set, the operator forcibly terminates all running Jobs and marks the WWR
+done with reason `DeadlineExceeded` if it has not completed within the specified
+number of seconds of its creation. Omitting the field disables the deadline.
+
+> **ℹ️ Note:**
+> `activeDeadlineSeconds` is measured from `metadata.creationTimestamp`, not
+> from when execution actually started, making it a hard wall-clock limit on
+> the total time a request may occupy the system.
 
 ### WorkflowWebhookRequest
 
@@ -170,13 +197,33 @@ workflowwebhook-example-b5lmh   true   workflowwebhook-example   1              
 workflowwebhook-example-lw2ws   true   workflowwebhook-example   1                 1             12m
 ```
 
+#### Status conditions
+
+The `status.conditions` field records lifecycle events. The most recent
+condition reflects the final outcome:
+
+| `reason`           | Meaning                           |
+| ------------------ | --------------------------------- |
+| `Done`             | All Workflows completed normally. |
+| `Suspended`        | No Workflows were executed.       |
+| `Forbidden`        | Another WWR was running.          |
+| `NoWorkflows`      | Nothing to execute.               |
+| `DeadlineExceeded` | Running Jobs were terminated.     |
+
+```sh
+kubectl get wwr -n example -o jsonpath='{.items[-1].status.conditions[-1]}'
+```
+
 ---
 
 ## Request Data in Jobs
 
 Every Job cloned by the operator has the original HTTP request data mounted as
 read-only files at `/var/run/secrets/kubernetes.io/request/` inside all its
-containers:
+containers. The data is stored in a Kubernetes `Secret` (named
+`{webhookName}-request-{random}` in the WWR's namespace) and either mounted
+directly for same-namespace Jobs or mirrored into the Job's own namespace for
+cross-namespace Jobs.
 
 | File         | Content                                        |
 | ------------ | ---------------------------------------------- |
@@ -187,6 +234,12 @@ containers:
 | `url`        | Full request URL                               |
 | `remoteAddr` | Client IP and port (e.g. `10.0.0.5:54321`)     |
 | `timestamp`  | Time the request was received (UNIX timestamp) |
+
+> **⚠️ Important:**
+> Job templates **must** have `spec.suspend: true`. Without it,
+> Kubernetes will run the Job immediately when it is created as a template,
+> before the operator has a chance to clone it. The operator sets
+> `spec.suspend: false` on each cloned copy automatically.
 
 ---
 
@@ -241,6 +294,7 @@ spec:
         - name: error
           image: bash
           command: ["echo", "ERROR"]
+      restartPolicy: Never
 ---
 # Workflow triggered on failure: runs job-example-error.
 apiVersion: simple-cicd.jlsalvador.online/v1alpha2
@@ -274,68 +328,19 @@ metadata:
 spec:
   workflows:
     - name: workflow-example
+  ttlSecondsAfterFinished: 3600 # Clean up WWRs after 1 hour.
 ```
 
-In this example, we are going to trigger our WorkflowWebhook requesting it
-through `kubectl port-forward`.
+Trigger the WorkflowWebhook via `kubectl port-forward`:
 
 ```sh
 kubectl -n simple-cicd port-forward svc/operator 9000:9000 &
 curl -XPOST http://localhost:9000/example/workflowwebhook-example
 ```
 
-You could also trigger the WorkflowWebhook directly requesting it to the
-operator service, inside the cluster, or through LoadBalancer service.
-
-The next example shows how to configure an Ingress for exposing the operator service
-externally.
-
-```yaml
-# Secret for basic-auth for the Ingress.
-apiVersion: v1
-kind: Secret
-metadata:
-  name: basic-auth
-  namespace: simple-cicd
-type: Opaque
-stringData:
-  auth: |
-    # user:pass
-    user:$apr1$j.P.ucaS$hHtkMN19glS9.ffLns2Eh/
----
-# Ingress to expose the operator service externally.
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: ingress
-  namespace: simple-cicd
-  annotations:
-    nginx.ingress.kubernetes.io/auth-type: basic
-    nginx.ingress.kubernetes.io/auth-secret: basic-auth
-spec:
-  ingressClassName: nginx
-  rules:
-    - host: example.org
-      http:
-        paths:
-          - path: /example/workflowwebhook-example
-            pathType: Prefix
-            backend:
-              service:
-                name: simple-cicd
-                port:
-                  number: 9000
-```
-
-Trigger the example WorkflowWebhook:
-
-```sh
-# From outside the cluster
-curl -u user:pass -XPOST http://example.org/example/workflowwebhook-example
-
-# From inside the cluster
-curl -XPOST http://operator.simple-cicd:9000/example/workflowwebhook-example
-```
+> **ℹ️ Note:**
+> You can also reach the operator directly from within the cluster or expose it
+> through any Service. Remember to set up proper authentication & authorization.
 
 ---
 
