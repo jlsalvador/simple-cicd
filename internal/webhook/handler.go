@@ -120,6 +120,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			// the WWR, so the reconciler falls back to wwr.Metadata.Namespace.
 			RequestSecret:           types.ResourceName{Name: secretName},
 			TTLSecondsAfterFinished: webhook.Spec.TTLSecondsAfterFinished,
+			ActiveDeadlineSeconds:   webhook.Spec.ActiveDeadlineSeconds,
 		},
 	}
 
@@ -134,10 +135,11 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "failed to create WorkflowWebhookRequest", http.StatusInternalServerError)
 		return
 	}
-	log.Printf("[webhook] created WWR %s/%s (secret %s, TTL %s) for webhook %s/%s",
+	log.Printf("[webhook] created WWR %s/%s (secret %s, TTL %s, deadline %s) for webhook %s/%s",
 		namespace, created.Metadata.Name,
 		secretName,
 		formatTTL(webhook.Spec.TTLSecondsAfterFinished),
+		formatTTL(webhook.Spec.ActiveDeadlineSeconds),
 		namespace, webhookName)
 
 	// Wake the reconciler immediately instead of waiting for the next tick.

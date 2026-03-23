@@ -410,6 +410,63 @@ func (r *Reconciler) checkTTL(wwr *types.WorkflowWebhookRequest) error {
 	return r.client.DeleteWWR(wwr.Metadata.Namespace, wwr.Metadata.Name)
 }
 
+// checkActiveDeadline marks the WWR as done with reason "DeadlineExceeded" if
+// ActiveDeadlineSeconds has elapsed since metadata.creationTimestamp, and then
+// deletes every currently running Job.
+// Must only be called for WWRs that are not yet done.
+//
+// The deadline is measured from creationTimestamp rather than status.startTime
+// so that it acts as a hard wall-clock limit on the total time a request may
+// occupy the system, including any time spent waiting before initialization.
+//
+// Jobs are deleted explicitly because the WWR is not being removed - it is
+// only marked done - so Kubernetes GC via ownerReferences does not fire.
+// Both same-namespace and cross-namespace jobs are terminated.
+func (r *Reconciler) checkActiveDeadline(wwr *types.WorkflowWebhookRequest) (exceeded bool, err error) {
+	deadline := wwr.Spec.ActiveDeadlineSeconds
+	if deadline == nil {
+		return false, nil // no deadline configured.
+	}
+	if wwr.Metadata.CreationTimestamp == nil {
+		return false, nil // no creation timestamp available; skip to be safe.
+	}
+	elapsed := time.Since(*wwr.Metadata.CreationTimestamp)
+	deadlineDur := time.Duration(*deadline) * time.Second
+	if elapsed < deadlineDur {
+		return false, nil // deadline not yet reached.
+	}
+	log.Printf("[reconciler] %s/%s: active deadline of %ds exceeded (%s elapsed) - marking done and terminating jobs",
+		wwr.Metadata.Namespace, wwr.Metadata.Name, *deadline, elapsed.Round(time.Second))
+
+	// Snapshot CurrentJobs before markDone clears it.
+	jobsToDelete := make([]types.ResourceName, len(wwr.Status.CurrentJobs))
+	copy(jobsToDelete, wwr.Status.CurrentJobs)
+
+	if err := r.markDone(wwr, "DeadlineExceeded",
+		fmt.Sprintf("active deadline of %ds exceeded", *deadline)); err != nil {
+		return true, err
+	}
+
+	// Terminate all jobs that were running at deadline time.
+	// We delete explicitly because the WWR is only marked done, not deleted,
+	// so Kubernetes GC via ownerReferences does not fire.
+	for _, jobRef := range jobsToDelete {
+		ns := jobRef.Namespace
+		if ns == "" {
+			ns = wwr.Metadata.Namespace
+		}
+		log.Printf("[reconciler] %s/%s: deleting job %s/%s (deadline exceeded)",
+			wwr.Metadata.Namespace, wwr.Metadata.Name, ns, jobRef.Name)
+		if delErr := r.client.DeleteJob(ns, jobRef.Name); delErr != nil {
+			// Log but do not return: delete as many as possible and let
+			// the next reconcile tick retry any that failed.
+			log.Printf("[reconciler] error deleting job %s/%s after deadline: %v",
+				ns, jobRef.Name, delErr)
+		}
+	}
+	return true, nil
+}
+
 // runningWWRsForWebhook returns all non-done WWRs in namespace that reference
 // the given webhook, excluding the one with name excludeName.
 func (r *Reconciler) runningWWRsForWebhook(

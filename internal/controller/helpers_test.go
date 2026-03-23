@@ -3,6 +3,8 @@ package controller
 // helpers_test.go – shared builder helpers and fixtures.
 
 import (
+	"time"
+
 	"github.com/jlsalvador/simple-cicd/internal/types"
 )
 
@@ -14,13 +16,15 @@ import (
 // The secret is assumed to already exist in the cluster (created by the handler
 // before the WWR); the reconciler reads it by name, not by value.
 func makeWWR(ns, name, webhookName string) *types.WorkflowWebhookRequest {
-	return &types.WorkflowWebhookRequest{
+	now := time.Now()
+	wwr := &types.WorkflowWebhookRequest{
 		APIVersion: types.APIGroup + "/" + types.APIVersion,
 		Kind:       "WorkflowWebhookRequest",
 		Metadata: types.ObjectMeta{
-			Namespace: ns,
-			Name:      name,
-			UID:       "wwr-uid-" + name,
+			Namespace:         ns,
+			Name:              name,
+			UID:               "wwr-uid-" + name,
+			CreationTimestamp: &now,
 		},
 		Spec: types.WorkflowWebhookRequestSpec{
 			WorkflowWebhook: types.ResourceName{Name: webhookName},
@@ -29,6 +33,15 @@ func makeWWR(ns, name, webhookName string) *types.WorkflowWebhookRequest {
 			RequestSecret: types.ResourceName{Name: "test-request-secret"},
 		},
 	}
+	return wwr
+}
+
+// makeWWRWithCreationTime creates a WWR whose CreationTimestamp is set to a
+// specific point in the past, for testing activeDeadlineSeconds behaviour.
+func makeWWRWithCreationTime(ns, name, webhookName string, createdAt time.Time) *types.WorkflowWebhookRequest {
+	wwr := makeWWR(ns, name, webhookName)
+	wwr.Metadata.CreationTimestamp = &createdAt
+	return wwr
 }
 
 func makeWebhook(ns, name string, workflows []types.ResourceName) *types.WorkflowWebhook {

@@ -43,6 +43,7 @@ type handlerFakeClient struct {
 	failCreateSecret bool // make CreateRequestSecret return an error
 	webhookNotFound  bool // make GetWorkflowWebhook return an error
 	webhookTTL       *int32
+	webhookDeadline  *int32
 }
 
 var _ k8s.ClientIface = (*handlerFakeClient)(nil)
@@ -53,6 +54,7 @@ func (f *handlerFakeClient) GetWorkflowWebhook(_, _ string) (*types.WorkflowWebh
 	}
 	wh := &types.WorkflowWebhook{}
 	wh.Spec.TTLSecondsAfterFinished = f.webhookTTL
+	wh.Spec.ActiveDeadlineSeconds = f.webhookDeadline
 	return wh, nil
 }
 
@@ -433,6 +435,45 @@ func TestHandler_NoTTLWhenWebhookHasNone(t *testing.T) {
 	if wwr.Spec.TTLSecondsAfterFinished != nil {
 		t.Errorf("expected no TTL on WWR when webhook has none, got %d",
 			*wwr.Spec.TTLSecondsAfterFinished)
+	}
+}
+
+func TestHandler_ActiveDeadlinePropagatedToWWR(t *testing.T) {
+	deadline := int32(300)
+	fc := &handlerFakeClient{webhookDeadline: &deadline}
+	h := NewHandler(fc, func() {})
+
+	req := httptest.NewRequest(http.MethodPost, "/default/my-hook", nil)
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d", rr.Code)
+	}
+	wwr := fc.createdWWRs[0]
+	if wwr.Spec.ActiveDeadlineSeconds == nil {
+		t.Fatalf("expected ActiveDeadlineSeconds to be set on the WWR")
+	}
+	if *wwr.Spec.ActiveDeadlineSeconds != deadline {
+		t.Errorf("expected deadline=%d, got %d", deadline, *wwr.Spec.ActiveDeadlineSeconds)
+	}
+}
+
+func TestHandler_NoDeadlineWhenWebhookHasNone(t *testing.T) {
+	fc := &handlerFakeClient{} // webhookDeadline is nil
+	h := NewHandler(fc, func() {})
+
+	req := httptest.NewRequest(http.MethodPost, "/default/my-hook", nil)
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d", rr.Code)
+	}
+	wwr := fc.createdWWRs[0]
+	if wwr.Spec.ActiveDeadlineSeconds != nil {
+		t.Errorf("expected no deadline on WWR when webhook has none, got %d",
+			*wwr.Spec.ActiveDeadlineSeconds)
 	}
 }
 

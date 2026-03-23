@@ -27,6 +27,11 @@ spec:
       name: TTL
       type: integer
       priority: 1
+    - description: Maximum seconds a WorkflowWebhookRequest may remain active after creation. Empty means unlimited.
+      jsonPath: .spec.activeDeadlineSeconds
+      name: Deadline
+      type: integer
+      priority: 1
     name: v1alpha2
     schema:
       openAPIV3Schema:
@@ -78,6 +83,19 @@ spec:
                 type: integer
                 format: int32
                 minimum: 0
+              activeDeadlineSeconds:
+                description: >
+                  If set, every WorkflowWebhookRequest created from this
+                  WorkflowWebhook will be forcibly marked done with reason
+                  "DeadlineExceeded" if it is still running this many seconds
+                  after creation. The deadline is measured from
+                  metadata.creationTimestamp.
+                  Omitting this field disables the deadline.
+                  The value is copied into the WorkflowWebhookRequest spec at
+                  creation time and is not affected by later changes to this field.
+                type: integer
+                format: int32
+                minimum: 1
               workflows:
                 description: >
                   Ordered list of Workflows to execute when a request arrives.

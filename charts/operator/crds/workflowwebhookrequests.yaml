@@ -107,6 +107,18 @@ spec:
                 type: integer
                 format: int32
                 minimum: 0
+              activeDeadlineSeconds:
+                description: >
+                  If set, this WorkflowWebhookRequest will be forcibly marked
+                  done with reason "DeadlineExceeded" if it is still running
+                  this many seconds after creation. The deadline is measured
+                  from metadata.creationTimestamp.
+                  Omitting this field disables the deadline.
+                  Inherited from WorkflowWebhookSpec.activeDeadlineSeconds
+                  at creation time; not updated if the WorkflowWebhook changes.
+                type: integer
+                format: int32
+                minimum: 1
               workflowWebhook:
                 description: >
                   Reference to the WorkflowWebhook that was triggered. The

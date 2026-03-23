@@ -51,6 +51,7 @@ type ObjectMeta struct {
 	Annotations       map[string]string `json:"annotations,omitempty"`
 	OwnerReferences   []OwnerReference  `json:"ownerReferences,omitempty"`
 	Finalizers        []string          `json:"finalizers,omitempty"`
+	CreationTimestamp *time.Time        `json:"creationTimestamp,omitempty"`
 	DeletionTimestamp *time.Time        `json:"deletionTimestamp,omitempty"`
 }
 
@@ -115,6 +116,14 @@ type WorkflowWebhookSpec struct {
 	// many seconds after it completes. 0 means delete immediately on completion.
 	// Omitting the field (nil) disables automatic deletion.
 	TTLSecondsAfterFinished *int32 `json:"ttlSecondsAfterFinished,omitempty"`
+
+	// ActiveDeadlineSeconds, if set, is inherited by every WWR created from
+	// this WorkflowWebhook and limits how long a WWR may remain active after
+	// creation. If the WWR is still running when the deadline expires, it is
+	// marked done with reason "DeadlineExceeded". 0 is not meaningful (a WWR
+	// cannot complete in zero seconds); use a positive value.
+	// Omitting the field (nil) disables the deadline.
+	ActiveDeadlineSeconds *int32 `json:"activeDeadlineSeconds,omitempty"`
 }
 
 // --------------------------------------------------------------------------
@@ -173,6 +182,13 @@ type WorkflowWebhookRequestSpec struct {
 	// WorkflowWebhookSpec.TTLSecondsAfterFinished at creation time.
 	// 0 means delete immediately; nil disables automatic deletion.
 	TTLSecondsAfterFinished *int32 `json:"ttlSecondsAfterFinished,omitempty"`
+
+	// ActiveDeadlineSeconds, if set, limits how long this WWR may remain
+	// active after creation. If still running when the deadline expires, it
+	// is marked done with reason "DeadlineExceeded". Inherited from
+	// WorkflowWebhookSpec.ActiveDeadlineSeconds at creation time.
+	// nil disables the deadline.
+	ActiveDeadlineSeconds *int32 `json:"activeDeadlineSeconds,omitempty"`
 }
 
 // WorkflowWebhookRequestStatus holds the observed state of a WWR.

@@ -880,3 +880,123 @@ func TestGenerateMirroredSecretName_LongWWRName(t *testing.T) {
 		t.Errorf("secret name from long wwr name exceeds 253 chars: %d", len(name))
 	}
 }
+
+// --------------------------------------------------------------------------
+// activeDeadlineSeconds
+// --------------------------------------------------------------------------
+
+func TestReconcile_ActiveDeadline_Exceeded(t *testing.T) {
+	fc := newFakeClient(t)
+	// CreationTimestamp 2 minutes in the past, deadline 60s → exceeded.
+	wwr := makeWWRWithCreationTime("default", "wwr-deadline", "hook",
+		time.Now().Add(-2*time.Minute))
+	wwr.Metadata.Finalizers = []string{types.FinalizerCleanup}
+	deadline := int32(60)
+	wwr.Spec.ActiveDeadlineSeconds = &deadline
+	fc.addWWR(wwr)
+
+	r := NewReconciler(fc)
+	if err := r.reconcileWWR(wwr); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !wwr.Status.Done {
+		t.Errorf("expected WWR to be marked done when active deadline is exceeded")
+	}
+	if len(wwr.Status.Conditions) == 0 {
+		t.Fatalf("expected at least one condition")
+	}
+	cond := wwr.Status.Conditions[len(wwr.Status.Conditions)-1]
+	if cond.Reason != "DeadlineExceeded" {
+		t.Errorf("expected reason DeadlineExceeded, got %q", cond.Reason)
+	}
+}
+
+func TestReconcile_ActiveDeadline_NotYetExceeded(t *testing.T) {
+	fc := newFakeClient(t)
+	// CreationTimestamp just now, deadline 3600s -> not exceeded.
+	wwr := makeWWRWithCreationTime("default", "wwr-deadline", "hook", time.Now())
+	wwr.Metadata.Finalizers = []string{types.FinalizerCleanup}
+	deadline := int32(3600)
+	wwr.Spec.ActiveDeadlineSeconds = &deadline
+	fc.addWWR(wwr)
+	fc.addWebhook(makeWebhook("default", "hook", []types.ResourceName{ref("wf-a")}))
+	fc.addWorkflow(makeWorkflow("default", "wf-a", []types.ResourceName{ref("job-tmpl")}))
+	fc.addJobTemplate("default", "job-tmpl", minimalJobRaw("job-tmpl"))
+
+	r := NewReconciler(fc)
+	if err := r.reconcileWWR(wwr); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if wwr.Status.Done {
+		t.Errorf("expected WWR not to be done when deadline has not elapsed")
+	}
+	// Normal initialization should have proceeded.
+	if wwr.Status.Steps != 1 {
+		t.Errorf("expected Steps=1 (initialization ran), got %d", wwr.Status.Steps)
+	}
+}
+
+func TestReconcile_ActiveDeadline_ExceededDuringProgress(t *testing.T) {
+	fc := newFakeClient(t)
+	// Start with a WWR that has already been initialized (Steps=1, job running).
+	past := time.Now().Add(-5 * time.Minute)
+	wwr := makeWWRWithCreationTime("default", "wwr-deadline", "hook", past)
+	wwr.Metadata.Finalizers = []string{types.FinalizerCleanup}
+	deadline := int32(60) // 1 minute - already exceeded.
+	wwr.Spec.ActiveDeadlineSeconds = &deadline
+	wwr.Status.Steps = 1
+	wwr.Status.CurrentJobs = []types.ResourceName{{Namespace: "default", Name: "job-running"}}
+	fc.addWWR(wwr)
+	fc.setJobStatus("default", "job-running", runningStatus())
+
+	r := NewReconciler(fc)
+	if err := r.reconcileWWR(wwr); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !wwr.Status.Done {
+		t.Errorf("expected running WWR to be marked done when deadline is exceeded mid-execution")
+	}
+	if wwr.Status.Conditions[len(wwr.Status.Conditions)-1].Reason != "DeadlineExceeded" {
+		t.Errorf("expected DeadlineExceeded condition")
+	}
+}
+
+func TestReconcile_ActiveDeadline_ExceededDuringProgress_JobsDeleted(t *testing.T) {
+	fc := newFakeClient(t)
+	past := time.Now().Add(-5 * time.Minute)
+	wwr := makeWWRWithCreationTime("default", "wwr-deadline", "hook", past)
+	wwr.Metadata.Finalizers = []string{types.FinalizerCleanup}
+	deadline := int32(60)
+	wwr.Spec.ActiveDeadlineSeconds = &deadline
+	wwr.Status.Steps = 1
+	// Two running jobs: one same-namespace, one cross-namespace.
+	wwr.Status.CurrentJobs = []types.ResourceName{
+		{Namespace: "default", Name: "job-same-ns"},
+		{Namespace: "other-ns", Name: "job-cross-ns"},
+	}
+	fc.addWWR(wwr)
+	fc.setJobStatus("default", "job-same-ns", runningStatus())
+	fc.setJobStatus("other-ns", "job-cross-ns", runningStatus())
+
+	r := NewReconciler(fc)
+	if err := r.reconcileWWR(wwr); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !wwr.Status.Done {
+		t.Errorf("expected WWR to be marked done")
+	}
+	// Both jobs must have been explicitly deleted.
+	if len(fc.deleteJobCalls) != 2 {
+		t.Errorf("expected 2 DeleteJob calls, got %v", fc.deleteJobCalls)
+	}
+	deleted := make(map[string]bool)
+	for _, c := range fc.deleteJobCalls {
+		deleted[c] = true
+	}
+	if !deleted["default/job-same-ns"] {
+		t.Errorf("same-namespace job was not deleted")
+	}
+	if !deleted["other-ns/job-cross-ns"] {
+		t.Errorf("cross-namespace job was not deleted")
+	}
+}
