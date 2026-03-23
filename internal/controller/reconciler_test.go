@@ -887,7 +887,7 @@ func TestGenerateMirroredSecretName_LongWWRName(t *testing.T) {
 
 func TestReconcile_ActiveDeadline_Exceeded(t *testing.T) {
 	fc := newFakeClient(t)
-	// CreationTimestamp 2 minutes in the past, deadline 60s → exceeded.
+	// CreationTimestamp 2 minutes in the past, deadline 60s -> exceeded.
 	wwr := makeWWRWithCreationTime("default", "wwr-deadline", "hook",
 		time.Now().Add(-2*time.Minute))
 	wwr.Metadata.Finalizers = []string{types.FinalizerCleanup}

@@ -144,7 +144,7 @@ func TestParsePath(t *testing.T) {
 		{"/ns-a/hook-b", "ns-a", "hook-b", false},
 		{"/only-one-segment", "", "", true},
 		{"/", "", "", true},
-		// SplitN with n=2 on "ns//extra" yields ["ns", "/extra"] — non-empty,
+		// SplitN with n=2 on "ns//extra" yields ["ns", "/extra"] - non-empty,
 		// so parsePath accepts it. Kubernetes rejects invalid names at admission.
 		{"/ns//extra", "ns", "/extra", false},
 	}
@@ -366,7 +366,7 @@ func TestHandler_ResponseContainsWWRName(t *testing.T) {
 }
 
 // --------------------------------------------------------------------------
-// ServeHTTP: WorkflowWebhook does not exist → 404, no WWR or secret created
+// ServeHTTP: WorkflowWebhook does not exist -> 404, no WWR or secret created
 // --------------------------------------------------------------------------
 
 func TestHandler_WebhookNotFound(t *testing.T) {

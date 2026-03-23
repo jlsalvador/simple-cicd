@@ -95,7 +95,7 @@ func newInClusterClient() (*Client, error) {
 }
 
 // newProxyClient builds a Client that talks to a local kubectl proxy.
-// No TLS, no auth token — kubectl handles both.
+// No TLS, no auth token - kubectl handles both.
 func newProxyClient() *Client {
 	baseURL := os.Getenv("KUBECTL_PROXY_URL")
 	if baseURL == "" {

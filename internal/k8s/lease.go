@@ -7,7 +7,7 @@ import (
 )
 
 // --------------------------------------------------------------------------
-// Leases (coordination.k8s.io/v1) — used for leader election
+// Leases (coordination.k8s.io/v1) - used for leader election
 // --------------------------------------------------------------------------
 
 const leaseAPIPath = "/apis/coordination.k8s.io/v1"
