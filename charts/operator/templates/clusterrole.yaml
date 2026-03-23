@@ -20,11 +20,13 @@ rules:
     resources: ["workflowwebhookrequests/status"]
     verbs: ["patch"]
 
-  # Create request Secrets for job pods (one per cloned job, in the job's namespace).
-  # The ownerReference is set at creation time, so no patch is needed.
+  # Manage request Secrets:
+  #   get    - read source secret data before mirroring to cross-namespace jobs.
+  #   create - create the request secret (handler) and mirrored copies (reconciler).
+  #   delete - remove the request secret during WWR cleanup (finalizer).
   - apiGroups: [""]
     resources: ["secrets"]
-    verbs: ["create"]
+    verbs: ["get", "create", "delete"]
 
   # Clone and inspect batch Jobs.
   - apiGroups: ["batch"]

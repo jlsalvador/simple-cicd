@@ -20,21 +20,68 @@ import (
 // Minimal fakeClient for handler tests
 // --------------------------------------------------------------------------
 
-// handlerFakeClient only needs CreateWWR (the handler does nothing else with
-// the client).
+// handlerCreatedSecret records a CreateRequestSecret call.
+type handlerCreatedSecret struct {
+	namespace string
+	name      string
+	data      types.WebhookRequestData
+}
+
+// handlerFakeClient implements the small subset of ClientIface that the
+// handler touches: GetWorkflowWebhook, CreateRequestSecret, CreateWWR,
+// and DeleteSecret (called on CreateWWR failure rollback).
 type handlerFakeClient struct {
-	mu              sync.Mutex
-	createdWWRs     []*types.WorkflowWebhookRequest
-	failCreate      bool
-	webhookNotFound bool // when true, GetWorkflowWebhook returns an error
+	mu sync.Mutex
+
+	// recorded calls
+	createdWWRs       []*types.WorkflowWebhookRequest
+	createdSecrets    []handlerCreatedSecret
+	deleteSecretCalls []string // "ns/name"
+
+	// injection flags
+	failCreateWWR    bool // make CreateWWR return an error
+	failCreateSecret bool // make CreateRequestSecret return an error
+	webhookNotFound  bool // make GetWorkflowWebhook return an error
+	webhookTTL       *int32
 }
 
 var _ k8s.ClientIface = (*handlerFakeClient)(nil)
 
+func (f *handlerFakeClient) GetWorkflowWebhook(_, _ string) (*types.WorkflowWebhook, error) {
+	if f.webhookNotFound {
+		return nil, fmt.Errorf("not found")
+	}
+	wh := &types.WorkflowWebhook{}
+	wh.Spec.TTLSecondsAfterFinished = f.webhookTTL
+	return wh, nil
+}
+
+func (f *handlerFakeClient) CreateRequestSecret(namespace, webhookName string, req types.WebhookRequestData) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.failCreateSecret {
+		return "", fmt.Errorf("injected CreateRequestSecret failure")
+	}
+	name := webhookName + "-request-abc"
+	f.createdSecrets = append(f.createdSecrets, handlerCreatedSecret{
+		namespace: namespace,
+		name:      name,
+		data:      req,
+	})
+	return name, nil
+}
+
+func (f *handlerFakeClient) DeleteSecret(namespace, name string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.deleteSecretCalls = append(f.deleteSecretCalls, namespace+"/"+name)
+	return nil
+}
+
 func (f *handlerFakeClient) CreateWWR(wwr *types.WorkflowWebhookRequest) (*types.WorkflowWebhookRequest, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if f.failCreate {
+	if f.failCreateWWR {
 		return nil, fmt.Errorf("injected CreateWWR failure")
 	}
 	wwr.Metadata.UID = "test-uid"
@@ -45,14 +92,9 @@ func (f *handlerFakeClient) CreateWWR(wwr *types.WorkflowWebhookRequest) (*types
 	return wwr, nil
 }
 
-// Stub implementations for unused methods:
+// --- Stub implementations for unused methods ---
+
 func (f *handlerFakeClient) GetWorkflow(_, _ string) (*types.Workflow, error) { return nil, nil }
-func (f *handlerFakeClient) GetWorkflowWebhook(_, _ string) (*types.WorkflowWebhook, error) {
-	if f.webhookNotFound {
-		return nil, fmt.Errorf("not found")
-	}
-	return &types.WorkflowWebhook{}, nil
-}
 func (f *handlerFakeClient) GetWWR(_, _ string) (*types.WorkflowWebhookRequest, error) {
 	return nil, nil
 }
@@ -63,11 +105,14 @@ func (f *handlerFakeClient) ListAllWWRs() ([]types.WorkflowWebhookRequest, error
 func (f *handlerFakeClient) UpdateWWRStatus(_ *types.WorkflowWebhookRequest) error    { return nil }
 func (f *handlerFakeClient) PatchWWRFinalizers(_ *types.WorkflowWebhookRequest) error { return nil }
 func (f *handlerFakeClient) DeleteWWR(_, _ string) error                              { return nil }
-func (f *handlerFakeClient) CreateSecretForJob(_, _ string, _ types.WebhookRequestData, _, _ string) error {
-	return nil
+func (f *handlerFakeClient) GetSecretData(_, _ string) (map[string]string, error) {
+	return map[string]string{}, nil
 }
-func (f *handlerFakeClient) GetJob(_, _ string) (*types.Job, error)        { return nil, nil }
-func (f *handlerFakeClient) GetJobRaw(_, _ string) (map[string]any, error) { return nil, nil }
+func (f *handlerFakeClient) MirrorSecret(_, _, _, _, _, _ string) error { return nil }
+func (f *handlerFakeClient) GetJob(_, _ string) (*types.Job, error)     { return nil, nil }
+func (f *handlerFakeClient) GetJobRaw(_, _ string) (map[string]any, error) {
+	return nil, nil
+}
 func (f *handlerFakeClient) CreateJobRaw(_ string, _ map[string]any) (k8s.CreatedResource, error) {
 	return k8s.CreatedResource{}, nil
 }
@@ -143,20 +188,20 @@ func TestHandler_ValidRequest(t *testing.T) {
 	if !triggered {
 		t.Errorf("expected triggerFn to be called")
 	}
-	if len(fc.createdWWRs) != 1 {
-		t.Fatalf("expected 1 WWR created, got %d", len(fc.createdWWRs))
+
+	// Verify the request Secret was created before the WWR.
+	if len(fc.createdSecrets) != 1 {
+		t.Fatalf("expected 1 request secret created, got %d", len(fc.createdSecrets))
 	}
+	secretData := fc.createdSecrets[0].data
 
-	wwr := fc.createdWWRs[0]
-	req2 := wwr.Spec.Request
+	// Method should be base64("POST").
+	assertBase64(t, "method", secretData.Method, "POST")
+	// Body should be base64(`{"event":"push"}`).
+	assertBase64(t, "body", secretData.Body, body)
 
-	// Method should be base64("POST")
-	assertBase64(t, "method", req2.Method, "POST")
-	// Body should be base64(`{"event":"push"}`)
-	assertBase64(t, "body", req2.Body, body)
-
-	// Timestamp must decode to a valid Unix epoch
-	tsDecoded := mustDecodeBase64(t, "timestamp", req2.Timestamp)
+	// Timestamp must decode to a valid Unix epoch.
+	tsDecoded := mustDecodeBase64(t, "timestamp", secretData.Timestamp)
 	epoch, err := strconv.ParseInt(tsDecoded, 10, 64)
 	if err != nil {
 		t.Errorf("timestamp is not a valid integer: %q, err: %v", tsDecoded, err)
@@ -166,7 +211,22 @@ func TestHandler_ValidRequest(t *testing.T) {
 		t.Errorf("timestamp %d is not close to now (%d)", epoch, now)
 	}
 
-	// Labels
+	// Verify that exactly one WWR was created.
+	if len(fc.createdWWRs) != 1 {
+		t.Fatalf("expected 1 WWR created, got %d", len(fc.createdWWRs))
+	}
+	wwr := fc.createdWWRs[0]
+
+	// The WWR spec must reference the secret, not embed the data.
+	if wwr.Spec.RequestSecret.Name == "" {
+		t.Errorf("expected wwr.Spec.RequestSecret.Name to be set")
+	}
+	if wwr.Spec.RequestSecret.Name != fc.createdSecrets[0].name {
+		t.Errorf("WWR requestSecret.name %q does not match created secret name %q",
+			wwr.Spec.RequestSecret.Name, fc.createdSecrets[0].name)
+	}
+
+	// Labels.
 	if wwr.Metadata.Labels[types.LabelWebhookName] != "my-hook" {
 		t.Errorf("wrong webhook-name label: %q", wwr.Metadata.Labels[types.LabelWebhookName])
 	}
@@ -212,11 +272,11 @@ func TestHandler_HealthzRejected(t *testing.T) {
 }
 
 // --------------------------------------------------------------------------
-// ServeHTTP: CreateWWR failure → 500
+// ServeHTTP: CreateWWR failure -> secret rolled back, 500 returned
 // --------------------------------------------------------------------------
 
 func TestHandler_CreateWWRFailure(t *testing.T) {
-	fc := &handlerFakeClient{failCreate: true}
+	fc := &handlerFakeClient{failCreateWWR: true}
 	h := NewHandler(fc, func() {})
 
 	req := httptest.NewRequest(http.MethodPost, "/default/my-hook", nil)
@@ -225,6 +285,42 @@ func TestHandler_CreateWWRFailure(t *testing.T) {
 
 	if rr.Code != http.StatusInternalServerError {
 		t.Errorf("expected 500 on CreateWWR failure, got %d", rr.Code)
+	}
+	// The handler must have created the secret first, then rolled it back.
+	if len(fc.createdSecrets) != 1 {
+		t.Errorf("expected request secret to have been created before rollback, got %d", len(fc.createdSecrets))
+	}
+	if len(fc.deleteSecretCalls) != 1 {
+		t.Errorf("expected orphaned secret to be deleted on CreateWWR failure, deleteSecretCalls=%v",
+			fc.deleteSecretCalls)
+	}
+	if fc.deleteSecretCalls[0] != "default/"+fc.createdSecrets[0].name {
+		t.Errorf("deleted wrong secret: got %q, want %q",
+			fc.deleteSecretCalls[0], "default/"+fc.createdSecrets[0].name)
+	}
+}
+
+// --------------------------------------------------------------------------
+// ServeHTTP: CreateRequestSecret failure -> 500, no WWR created
+// --------------------------------------------------------------------------
+
+func TestHandler_CreateSecretFailure(t *testing.T) {
+	fc := &handlerFakeClient{failCreateSecret: true}
+	triggered := false
+	h := NewHandler(fc, func() { triggered = true })
+
+	req := httptest.NewRequest(http.MethodPost, "/default/my-hook", nil)
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusInternalServerError {
+		t.Errorf("expected 500 on CreateRequestSecret failure, got %d", rr.Code)
+	}
+	if len(fc.createdWWRs) != 0 {
+		t.Errorf("expected no WWR to be created when secret creation fails, got %d", len(fc.createdWWRs))
+	}
+	if triggered {
+		t.Errorf("expected triggerFn not to be called")
 	}
 }
 
@@ -243,7 +339,10 @@ func TestHandler_EmptyBody(t *testing.T) {
 	if rr.Code != http.StatusAccepted {
 		t.Errorf("expected 202 for empty body, got %d", rr.Code)
 	}
-	assertBase64(t, "body", fc.createdWWRs[0].Spec.Request.Body, "")
+	if len(fc.createdSecrets) != 1 {
+		t.Fatalf("expected 1 request secret, got %d", len(fc.createdSecrets))
+	}
+	assertBase64(t, "body", fc.createdSecrets[0].data.Body, "")
 }
 
 // --------------------------------------------------------------------------
@@ -282,6 +381,9 @@ func TestHandler_WebhookNotFound(t *testing.T) {
 	}
 	if len(fc.createdWWRs) != 0 {
 		t.Errorf("expected no WWR to be created, got %d", len(fc.createdWWRs))
+	}
+	if len(fc.createdSecrets) != 0 {
+		t.Errorf("expected no request secret to be created, got %d", len(fc.createdSecrets))
 	}
 	if triggered {
 		t.Errorf("expected triggerFn not to be called")

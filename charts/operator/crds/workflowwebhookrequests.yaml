@@ -63,51 +63,38 @@ spec:
           spec:
             description: >
               WorkflowWebhookRequestSpec is immutable after creation. It records
-              the WorkflowWebhook that was triggered and the full HTTP request
-              payload, which is later materialised as a Secret in each Job's
-              namespace.
+              the WorkflowWebhook that was triggered, a reference to the Secret
+              holding the HTTP request data, and the TTL inherited from the
+              WorkflowWebhook.
             properties:
-              request:
+              requestSecret:
                 description: >
-                  HTTP request data that triggered this WorkflowWebhookRequest.
-                  All fields are base64-encoded. A Secret containing this data
-                  is created per cloned Job in the Job's own namespace and
-                  mounted at /var/run/secrets/kubernetes.io/request/, enabling
-                  cross-namespace job execution without cross-namespace Secret
-                  references.
+                  Reference to the Secret (in the same namespace as this
+                  WorkflowWebhookRequest) that contains the base64-encoded HTTP
+                  request data that triggered this WorkflowWebhookRequest.
+                  The Secret is created by the webhook handler before the
+                  WorkflowWebhookRequest and deleted by the cleanup finalizer
+                  when the WorkflowWebhookRequest is removed.
+                  Jobs in the same namespace mount this Secret directly. Jobs
+                  in other namespaces receive a per-job mirrored copy, owned by
+                  the Job, so it is garbage-collected automatically.
+                  All Secret keys hold base64-encoded values:
+                  body, headers, host, method, remoteAddr, timestamp, url.
                 properties:
-                  body:
-                    description: Base64-encoded request body.
+                  name:
+                    description: Name of the request Secret.
                     type: string
-                  headers:
-                    description: Base64-encoded JSON map of request headers.
-                    type: string
-                  host:
-                    description: Base64-encoded Host header value.
-                    type: string
-                  method:
-                    description: Base64-encoded HTTP method (e.g. GET, POST).
-                    type: string
-                  remoteAddr:
-                    description: Base64-encoded remote address of the caller.
-                    type: string
-                  timestamp:
+                    maxLength: 253
+                    pattern: '^[a-z0-9]([a-z0-9\-\.]*[a-z0-9])?$'
+                  namespace:
                     description: >
-                      Base64-encoded Unix epoch (seconds since
-                      1970-01-01 00:00:00 UTC) at which the webhook was
-                      received. Example decoded value: "1735689600".
+                      Namespace of the request Secret. Defaults to the
+                      WorkflowWebhookRequest's own namespace when omitted.
                     type: string
-                  url:
-                    description: Base64-encoded request URL.
-                    type: string
+                    maxLength: 63
+                    pattern: '^[a-z0-9]([a-z0-9\-]*[a-z0-9])?$'
                 required:
-                - body
-                - headers
-                - host
-                - method
-                - remoteAddr
-                - timestamp
-                - url
+                - name
                 type: object
               ttlSecondsAfterFinished:
                 description: >
@@ -142,7 +129,7 @@ spec:
                 - name
                 type: object
             required:
-            - request
+            - requestSecret
             - workflowWebhook
             type: object
           status:

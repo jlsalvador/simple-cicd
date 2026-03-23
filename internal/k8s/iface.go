@@ -27,7 +27,25 @@ type ClientIface interface {
 
 	// Secrets.
 
-	CreateSecretForJob(namespace, secretName string, req types.WebhookRequestData, jobName, jobUID string) error
+	// CreateRequestSecret creates a Secret containing the base64-encoded HTTP
+	// request data that triggered a WWR. The name is generated from
+	// webhookName and the actual name assigned by the API server is returned.
+	// The Secret has no ownerReference; the WWR cleanup finalizer deletes it.
+	CreateRequestSecret(namespace, webhookName string, req types.WebhookRequestData) (string, error)
+
+	// GetSecretData returns the raw data map of a Secret. Values are
+	// base64-encoded strings, exactly as returned by the Kubernetes API.
+	GetSecretData(namespace, name string) (map[string]string, error)
+
+	// MirrorSecret copies the data of an existing Secret from srcNamespace/srcName
+	// into dstNamespace/dstName, setting the given Job as its owner so the copy
+	// is garbage-collected automatically when the Job is deleted.
+	// Used to propagate the WWR request Secret into cross-namespace job pods.
+	MirrorSecret(srcNamespace, srcName, dstNamespace, dstName, jobName, jobUID string) error
+
+	// DeleteSecret deletes a Secret by namespace and name.
+	// Returns nil if the Secret is already gone (404).
+	DeleteSecret(namespace, name string) error
 
 	// Jobs.
 

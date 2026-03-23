@@ -21,22 +21,50 @@ func (r *Reconciler) addFinalizer(wwr *types.WorkflowWebhookRequest) error {
 
 // handleDeletion is called when the WWR's DeletionTimestamp is set.
 //
-// It deletes every job that was cloned into a namespace other than the
-// WWR's own namespace (same-namespace jobs are garbage-collected by
-// Kubernetes via ownerReferences). Once done it removes the finalizer
-// so Kubernetes can proceed with the actual deletion.
+// It performs three cleanup steps before removing the finalizer:
 //
-// Note: cross-namespace ownerReferences are disallowed by design in
-// Kubernetes (docs.k8s.io/concepts/architecture/garbage-collection).
+//  1. Deletes the request Secret in the WWR's own namespace. This Secret has
+//     no ownerReference (to avoid the creation-order chicken-and-egg problem),
+//     so we delete it explicitly here.
 //
-// A namespaced owner must exist in the same namespace as the dependent;
-// otherwise the GC treats the reference as absent and may delete the
-// dependent unexpectedly. We therefore manage cross-namespace cleanup
-// ourselves via this finalizer.
+//  2. Deletes every job that was cloned into a namespace other than the WWR's
+//     own namespace. Same-namespace jobs are garbage-collected by Kubernetes
+//     via ownerReferences; cross-namespace ones are not.
+//
+//     Note: cross-namespace ownerReferences are disallowed by design in
+//     Kubernetes (docs.k8s.io/concepts/architecture/garbage-collection):
+//     a namespaced owner must exist in the same namespace as the dependent;
+//     otherwise the GC treats the reference as absent and may delete the
+//     dependent unexpectedly. We therefore manage cross-namespace cleanup
+//     ourselves via this finalizer.
+//
+//  3. Removes the finalizer so Kubernetes can proceed with the actual deletion.
 func (r *Reconciler) handleDeletion(wwr *types.WorkflowWebhookRequest) error {
-	log.Printf("[reconciler] %s/%s: running cleanup finalizer (%d total jobs)",
-		wwr.Metadata.Namespace, wwr.Metadata.Name, len(wwr.Status.AllJobs))
+	log.Printf("[reconciler] %s/%s: running cleanup finalizer (request secret: %q, %d total jobs)",
+		wwr.Metadata.Namespace, wwr.Metadata.Name,
+		wwr.Spec.RequestSecret.Name, len(wwr.Status.AllJobs))
 
+	// Step 1: delete the request Secret.
+	// The Secret lives in the WWR's namespace (RequestSecret.Namespace is
+	// empty when it equals the WWR namespace, per the handler contract).
+	if name := wwr.Spec.RequestSecret.Name; name != "" {
+		ns := wwr.Spec.RequestSecret.Namespace
+		if ns == "" {
+			ns = wwr.Metadata.Namespace
+		}
+		if err := r.client.DeleteSecret(ns, name); err != nil {
+			// DeleteSecret already swallows 404s, so any error here is real.
+			// Log and continue: failing to delete the Secret should not block
+			// the WWR deletion.
+			log.Printf("[reconciler] %s/%s: error deleting request secret %s/%s: %v",
+				wwr.Metadata.Namespace, wwr.Metadata.Name, ns, name, err)
+		} else {
+			log.Printf("[reconciler] %s/%s: request secret %s/%s deleted",
+				wwr.Metadata.Namespace, wwr.Metadata.Name, ns, name)
+		}
+	}
+
+	// Step 2: delete cross-namespace jobs.
 	var deleteErr error
 	for _, jobRef := range wwr.Status.AllJobs {
 		jobNamespace := jobRef.Namespace
@@ -59,7 +87,7 @@ func (r *Reconciler) handleDeletion(wwr *types.WorkflowWebhookRequest) error {
 			wwr.Metadata.Namespace, wwr.Metadata.Name)
 	}
 
-	// Remove the finalizer so Kubernetes can complete the deletion.
+	// Step 3: remove the finalizer so Kubernetes can complete the deletion.
 	wwr.Metadata.Finalizers = removeFinalizer(wwr.Metadata.Finalizers, types.FinalizerCleanup)
 	if err := r.client.PatchWWRFinalizers(wwr); err != nil {
 		return fmt.Errorf("removing finalizer from %s/%s: %w",

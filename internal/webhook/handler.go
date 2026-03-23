@@ -31,6 +31,13 @@ func NewHandler(client k8s.ClientIface, triggerFn func()) *Handler {
 // Expected path: /{namespace}/{webhookName}
 //
 // Example: POST /default/hello-world
+//
+// The handler follows this sequence:
+//  1. Parse path and read request body.
+//  2. Look up the WorkflowWebhook (returns 404 for unknown webhooks).
+//  3. Create a request Secret containing the base64-encoded HTTP data.
+//  4. Create the WWR referencing that Secret.
+//  5. If step 4 fails, delete the orphaned Secret before returning the error.
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// /healthz is handled by the mux before reaching here, but guard anyway.
 	if r.URL.Path == "/healthz" {
@@ -58,7 +65,8 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Verify the WorkflowWebhook exists before doing anything else.
-	// Returning 404 here avoids creating orphaned WWRs for unknown webhooks.
+	// Returning 404 here avoids creating orphaned Secrets or WWRs for
+	// unknown webhooks.
 	webhook, err := h.client.GetWorkflowWebhook(namespace, webhookName)
 	if err != nil {
 		log.Printf("[webhook] WorkflowWebhook %s/%s not found: %v", namespace, webhookName, err)
@@ -68,10 +76,8 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Embed the HTTP request data directly in the WWR spec (base64-encoded).
-	//
-	// A Secret is created per cloned job at reconcile time, in the job's own
-	// namespace, so cross-namespace job execution is fully supported.
+	// Encode the HTTP request data. All fields are base64 so they can be
+	// stored verbatim in the Secret's data map.
 	//
 	// Timestamp is a Unix epoch (seconds UTC) to keep the format simple and
 	// language-agnostic for job pods that consume it.
@@ -85,6 +91,18 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		Timestamp:  base64.StdEncoding.EncodeToString(fmt.Append(nil, time.Now().Unix())),
 	}
 
+	// Create the request Secret before the WWR. We cannot set the WWR as its
+	// owner here (chicken-and-egg: the Secret must exist before the WWR, but
+	// the WWR UID is only available after creation). The WWR cleanup finalizer
+	// deletes this Secret explicitly instead.
+	secretName, err := h.client.CreateRequestSecret(namespace, webhookName, requestData)
+	if err != nil {
+		log.Printf("[webhook] error creating request secret for %s/%s: %v", namespace, webhookName, err)
+		http.Error(w, "failed to create request secret", http.StatusInternalServerError)
+		return
+	}
+	log.Printf("[webhook] created request secret %s/%s", namespace, secretName)
+
 	wwr := &types.WorkflowWebhookRequest{
 		APIVersion: types.APIGroup + "/" + types.APIVersion,
 		Kind:       "WorkflowWebhookRequest",
@@ -97,8 +115,10 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			},
 		},
 		Spec: types.WorkflowWebhookRequestSpec{
-			WorkflowWebhook:         types.ResourceName{Name: webhookName},
-			Request:                 requestData,
+			WorkflowWebhook: types.ResourceName{Name: webhookName},
+			// Namespace is omitted: the Secret lives in the same namespace as
+			// the WWR, so the reconciler falls back to wwr.Metadata.Namespace.
+			RequestSecret:           types.ResourceName{Name: secretName},
 			TTLSecondsAfterFinished: webhook.Spec.TTLSecondsAfterFinished,
 		},
 	}
@@ -106,11 +126,17 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	created, err := h.client.CreateWWR(wwr)
 	if err != nil {
 		log.Printf("[webhook] error creating WWR for %s/%s: %v", namespace, webhookName, err)
+		// Clean up the orphaned request Secret; if this fails we just log it.
+		if delErr := h.client.DeleteSecret(namespace, secretName); delErr != nil {
+			log.Printf("[webhook] warning: could not delete orphaned request secret %s/%s: %v",
+				namespace, secretName, delErr)
+		}
 		http.Error(w, "failed to create WorkflowWebhookRequest", http.StatusInternalServerError)
 		return
 	}
-	log.Printf("[webhook] created WWR %s/%s (TTL %s) for webhook %s/%s",
+	log.Printf("[webhook] created WWR %s/%s (secret %s, TTL %s) for webhook %s/%s",
 		namespace, created.Metadata.Name,
+		secretName,
 		formatTTL(webhook.Spec.TTLSecondsAfterFinished),
 		namespace, webhookName)
 

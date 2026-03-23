@@ -18,6 +18,13 @@ import (
 // compile-time guard
 var _ k8s.ClientIface = (*fakeClient)(nil)
 
+// requestSecretEntry records a call to CreateRequestSecret.
+type requestSecretEntry struct {
+	namespace string
+	name      string
+	data      types.WebhookRequestData
+}
+
 // fakeClient is a thread-safe in-memory implementation of ClientIface.
 // Every mutating call records itself so tests can assert side-effects.
 type fakeClient struct {
@@ -25,12 +32,19 @@ type fakeClient struct {
 	mu sync.RWMutex
 
 	// --- stored resources ---
-	workflows      map[string]*types.Workflow        // key: "ns/name"
-	webhooks       map[string]*types.WorkflowWebhook // key: "ns/name"
-	wwrs           map[string]*types.WorkflowWebhookRequest
-	jobTemplates   map[string]map[string]any // raw job templates: key "ns/name"
-	liveJobs       map[string]*types.Job     // cloned jobs: key "ns/name"
-	createdSecrets []string                  // list of "ns/name" pairs for asserts
+	workflows    map[string]*types.Workflow        // key: "ns/name"
+	webhooks     map[string]*types.WorkflowWebhook // key: "ns/name"
+	wwrs         map[string]*types.WorkflowWebhookRequest
+	jobTemplates map[string]map[string]any // raw job templates: key "ns/name"
+	liveJobs     map[string]*types.Job     // cloned jobs: key "ns/name"
+
+	// --- secret tracking ---
+	// requestSecrets records calls to CreateRequestSecret (handler creates these).
+	requestSecrets []requestSecretEntry
+	// mirroredSecrets records calls to MirrorSecret ("dstNs/dstName").
+	mirroredSecrets []string
+	// deleteSecretCalls records calls to DeleteSecret ("ns/name").
+	deleteSecretCalls []string
 
 	// --- call counters ---
 	updateStatusCalls   atomic.Int32
@@ -217,10 +231,61 @@ func (f *fakeClient) DeleteWWR(namespace, name string) error {
 // ClientIface – Secrets
 // --------------------------------------------------------------------------
 
-func (f *fakeClient) CreateSecretForJob(namespace, secretName string, _ types.WebhookRequestData, _, _ string) error {
+// CreateRequestSecret records the request data and returns a generated name.
+// In real operation this is called by the webhook handler, not the reconciler,
+// but the fake supports it so handler-level flows can be tested end-to-end if
+// needed. The reconciler only calls MirrorSecret and DeleteSecret.
+func (f *fakeClient) CreateRequestSecret(namespace, webhookName string, req types.WebhookRequestData) (string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.createdSecrets = append(f.createdSecrets, f.key(namespace, secretName))
+	name := webhookName + "-request-" + f.nextID()
+	f.requestSecrets = append(f.requestSecrets, requestSecretEntry{
+		namespace: namespace,
+		name:      name,
+		data:      req,
+	})
+	return name, nil
+}
+
+// GetSecretData returns a canned data map built from the stored request secret
+// that matches namespace/name. Used when MirrorSecret reads the source Secret.
+// Returns an empty map for any unknown secret (tests that don't need real data).
+func (f *fakeClient) GetSecretData(namespace, name string) (map[string]string, error) {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+	for _, e := range f.requestSecrets {
+		if e.namespace == namespace && e.name == name {
+			return map[string]string{
+				"body":       e.data.Body,
+				"headers":    e.data.Headers,
+				"host":       e.data.Host,
+				"method":     e.data.Method,
+				"url":        e.data.URL,
+				"remoteAddr": e.data.RemoteAddr,
+				"timestamp":  e.data.Timestamp,
+			}, nil
+		}
+	}
+	// Unknown secret: return empty data (acceptable for tests that only verify
+	// that MirrorSecret was called, not that it contains specific values).
+	return map[string]string{}, nil
+}
+
+// MirrorSecret records that a mirrored copy was requested from srcNs/srcName
+// into dstNs/dstName. Stored as "dstNs/dstName" for assertion convenience.
+func (f *fakeClient) MirrorSecret(_, _, dstNamespace, dstName, _, _ string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.mirroredSecrets = append(f.mirroredSecrets, f.key(dstNamespace, dstName))
+	return nil
+}
+
+// DeleteSecret records the deletion call. Returns nil for any input (including
+// already-absent secrets) to match the real implementation's 404-swallowing.
+func (f *fakeClient) DeleteSecret(namespace, name string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.deleteSecretCalls = append(f.deleteSecretCalls, f.key(namespace, name))
 	return nil
 }
 

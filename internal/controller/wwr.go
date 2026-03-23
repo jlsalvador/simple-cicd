@@ -255,20 +255,33 @@ func (r *Reconciler) resolveAndClone(
 
 // cloneJobsForWorkflow clones each job referenced in the workflow spec.
 //
-// Order of operations per job:
-//  1. Generate a unique secret name (known before either resource exists).
-//  2. Create the Job, with the secret already referenced as a volume.
-//     The pod will remain Pending until the Secret is created. This is
-//     intentional and resolves within milliseconds.
-//  3. Create the Secret in the same namespace, with its ownerReference
-//     pointing to the just-created Job, so the Secret is garbage-collected
-//     automatically when the Job is deleted.
+// The request Secret strategy depends on whether the job is in the same
+// namespace as the WWR:
+//
+//   - Same namespace: the job mounts the WWR's own request Secret directly.
+//     No copy is needed; all same-namespace jobs share it.
+//
+//   - Different namespace: a per-job mirrored Secret is created in the job's
+//     namespace after the Job is created, with the Job set as its owner so
+//     Kubernetes GC deletes it automatically when the Job is removed.
+//     The mirrored Secret name is pre-generated so it can be declared in the
+//     Job manifest before the Secret exists; the pod stays Pending until the
+//     mirror arrives (milliseconds in practice).
 func (r *Reconciler) cloneJobsForWorkflow(
 	wwr *types.WorkflowWebhookRequest,
 	workflow *types.Workflow,
 	wfNamespace string,
 ) ([]types.ResourceName, error) {
 	var result []types.ResourceName
+
+	// Resolve the namespace of the WWR's own request Secret.
+	// The handler stores it in the same namespace as the WWR, so the
+	// Namespace field is omitted (empty) and we fall back here.
+	mainSecretNs := wwr.Spec.RequestSecret.Namespace
+	if mainSecretNs == "" {
+		mainSecretNs = wwr.Metadata.Namespace
+	}
+	mainSecretName := wwr.Spec.RequestSecret.Name
 
 	for _, jobRef := range workflow.Spec.JobsToBeCloned {
 		// Resolve the namespace where the template job lives.
@@ -283,21 +296,23 @@ func (r *Reconciler) cloneJobsForWorkflow(
 			continue
 		}
 
-		// Step 1: choose the secret name upfront so we can reference it in
-		// the job manifest before the secret actually exists.
-		secretName := generateSecretName(wwr.Metadata.Name)
-
-		// Step 2: create the job with the secret volume already declared.
-		//
-		// The ownerReference to the WWR is only set when the job is in the
-		// same namespace: Kubernetes GC silently deletes dependents whose
-		// cross-namespace ownerReferences cannot be resolved, which would
-		// cause jobs to vanish shortly after creation.
-		//
-		// Cross-namespace job cleanup is handled exclusively by the finalizer
-		// on the WWR.
 		sameNamespace := namespace == wwr.Metadata.Namespace
-		cloned := prepareJobForCloning(raw, wwr, secretName, sameNamespace)
+
+		// Determine which Secret name to inject into the job's volume:
+		//   - Same namespace -> reuse the WWR's own request Secret directly.
+		//   - Cross namespace -> a unique mirrored copy will be created after
+		//     the Job exists (we need the Job UID for the ownerReference).
+		var jobSecretName string
+		if sameNamespace {
+			jobSecretName = mainSecretName
+		} else {
+			jobSecretName = generateMirroredSecretName(wwr.Metadata.Name)
+		}
+
+		// The ownerReference to the WWR is set only for same-namespace jobs;
+		// Kubernetes GC silently drops cross-namespace ownerReferences.
+		// Cross-namespace job cleanup is handled by the WWR finalizer.
+		cloned := prepareJobForCloning(raw, wwr, jobSecretName, sameNamespace)
 
 		created, err := r.client.CreateJobRaw(namespace, cloned)
 		if err != nil {
@@ -307,19 +322,24 @@ func (r *Reconciler) cloneJobsForWorkflow(
 			namespace, jobRef.Name, namespace, created.Name,
 			wwr.Metadata.Namespace, wwr.Metadata.Name)
 
-		// Step 3: create the secret, owned by the job from the start.
-		// Kubernetes GC will delete it when the job is removed (same-namespace).
-		if err := r.client.CreateSecretForJob(
-			namespace, secretName, wwr.Spec.Request,
-			created.Name, created.UID,
-		); err != nil {
-			// The job is already running; log and continue rather than failing
-			// the whole step, to avoid leaving partially-created state.
-			log.Printf("[reconciler] warning: created job %s/%s but failed to create its request secret %s/%s: %v",
-				namespace, created.Name, namespace, secretName, err)
-		} else {
-			log.Printf("[reconciler] created request secret %s/%s (owned by job %s)",
-				namespace, secretName, created.Name)
+		if !sameNamespace {
+			// Mirror the request Secret into the job's namespace, owned by
+			// the job so GC cleans it up when the job is deleted.
+			if err := r.client.MirrorSecret(
+				mainSecretNs, mainSecretName,
+				namespace, jobSecretName,
+				created.Name, created.UID,
+			); err != nil {
+				if delErr := r.client.DeleteJob(namespace, created.Name); delErr != nil {
+					log.Printf("[reconciler] error deleting job %s/%s after mirror failure: %v",
+						namespace, created.Name, delErr)
+				}
+				return nil, fmt.Errorf("mirroring request secret for job %s/%s: %w",
+					namespace, created.Name, err)
+			} else {
+				log.Printf("[reconciler] mirrored request secret %s/%s -> %s/%s (owned by job %s)",
+					mainSecretNs, mainSecretName, namespace, jobSecretName, created.Name)
+			}
 		}
 
 		result = append(result, types.ResourceName{
@@ -330,9 +350,9 @@ func (r *Reconciler) cloneJobsForWorkflow(
 	return result, nil
 }
 
-// generateSecretName returns a unique name for the per-job request Secret.
-// Format: <wwrName>-request-<5 random alphanumeric chars>
-func generateSecretName(wwrName string) string {
+// generateMirroredSecretName returns a unique name for a per-job mirrored
+// request Secret in a cross-namespace job. Format: <wwrName>-request-<5 chars>
+func generateMirroredSecretName(wwrName string) string {
 	const alphabet = "abcdefghijklmnopqrstuvwxyz0123456789"
 	const suffixLen = 5
 	suffix := make([]byte, suffixLen)

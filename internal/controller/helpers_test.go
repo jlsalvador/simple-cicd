@@ -10,6 +10,9 @@ import (
 // Resource builders
 // --------------------------------------------------------------------------
 
+// makeWWR creates a WorkflowWebhookRequest with a pre-populated RequestSecret.
+// The secret is assumed to already exist in the cluster (created by the handler
+// before the WWR); the reconciler reads it by name, not by value.
 func makeWWR(ns, name, webhookName string) *types.WorkflowWebhookRequest {
 	return &types.WorkflowWebhookRequest{
 		APIVersion: types.APIGroup + "/" + types.APIVersion,
@@ -21,7 +24,9 @@ func makeWWR(ns, name, webhookName string) *types.WorkflowWebhookRequest {
 		},
 		Spec: types.WorkflowWebhookRequestSpec{
 			WorkflowWebhook: types.ResourceName{Name: webhookName},
-			Request:         makeRequestData(),
+			// Namespace is intentionally omitted: the reconciler falls back to
+			// wwr.Metadata.Namespace, which is the expected production behaviour.
+			RequestSecret: types.ResourceName{Name: "test-request-secret"},
 		},
 	}
 }
@@ -89,18 +94,6 @@ func minimalJobRaw(name string) map[string]any {
 				},
 			},
 		},
-	}
-}
-
-func makeRequestData() types.WebhookRequestData {
-	return types.WebhookRequestData{
-		Body:       "e30=", // base64("{}")
-		Headers:    "e30=",
-		Host:       "bG9jYWxob3N0",     // base64("localhost")
-		Method:     "UE9TVA==",         // base64("POST")
-		URL:        "Lw==",             // base64("/")
-		RemoteAddr: "MTI3LjAuMC4x",     // base64("127.0.0.1")
-		Timestamp:  "MTczNTY4OTYwMA==", // base64("1735689600")
 	}
 }
 

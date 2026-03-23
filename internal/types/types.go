@@ -10,10 +10,13 @@ const (
 	APIVersion = "v1alpha2"
 
 	// FinalizerCleanup is added to every WWR so the reconciler can explicitly
-	// delete cross-namespace jobs before the WWR itself is removed.
+	// delete cross-namespace jobs and the request Secret before the WWR itself
+	// is removed.
 	//
 	// Kubernetes GC cannot follow cross-namespace ownerReferences, so this
-	// finalizer ensures those jobs are never orphaned.
+	// finalizer ensures those jobs are never orphaned. The request Secret has
+	// no ownerReference (to avoid the creation-order chicken-and-egg problem),
+	// so the finalizer deletes it explicitly too.
 	FinalizerCleanup = APIGroup + "/cleanup"
 
 	// Workflow next conditions
@@ -133,11 +136,9 @@ type WorkflowWebhookRequestList struct {
 // WebhookRequestData holds the HTTP request fields that triggered a
 // WorkflowWebhookRequest.
 //
-// All string values are base64-encoded so they can be
-// stored verbatim in the CRD and copied into a Secret at job-clone time.
-//
-// Timestamp is a Unix epoch (seconds since 1970-01-01 UTC), base64-encoded.
-// Example decoded value: "1735689600"
+// All string values are base64-encoded so they can be stored verbatim in a
+// Kubernetes Secret. Timestamp is a Unix epoch (seconds since 1970-01-01 UTC),
+// base64-encoded. Example decoded value: "1735689600".
 type WebhookRequestData struct {
 	Body       string `json:"body"`
 	Headers    string `json:"headers"`
@@ -149,11 +150,23 @@ type WebhookRequestData struct {
 }
 
 // WorkflowWebhookRequestSpec stores the references needed to process the request.
-// The HTTP request data is embedded directly so that jobs can be cloned into any
-// namespace without needing cross-namespace Secret access.
+//
+// The HTTP request data is kept in a dedicated Kubernetes Secret
+// (spec.requestSecret) rather than embedded in the spec, for two reasons:
+//  1. Secret data is opaque to etcd watchers and audit logs.
+//  2. It avoids bloating the WWR object for large request bodies.
+//
+// Jobs in the same namespace as the WWR mount that Secret directly. Jobs
+// running in a different namespace get a per-job mirrored copy created by the
+// reconciler, owned by the Job so the copy is GC'd when the Job is deleted.
 type WorkflowWebhookRequestSpec struct {
-	WorkflowWebhook ResourceName       `json:"workflowWebhook"`
-	Request         WebhookRequestData `json:"request"`
+	WorkflowWebhook ResourceName `json:"workflowWebhook"`
+
+	// RequestSecret is the Secret (in the WWR's namespace) that holds the HTTP
+	// request data for this WWR. Created by the webhook handler before the WWR
+	// itself; deleted explicitly by the cleanup finalizer (it has no
+	// ownerReference to avoid the creation-order chicken-and-egg problem).
+	RequestSecret ResourceName `json:"requestSecret"`
 
 	// TTLSecondsAfterFinished, if set, causes this WWR to be automatically
 	// deleted the given number of seconds after it completes. Inherited from
@@ -175,7 +188,7 @@ type WorkflowWebhookRequestStatus struct {
 	FailedJobs       int            `json:"failedJobs,omitempty"`
 	Steps            int            `json:"steps"`
 	SuccessfulJobs   int            `json:"successfulJobs,omitempty"`
-	// StartTime is when the first reconciliation step began (Steps goes 0 → 1).
+	// StartTime is when the first reconciliation step began (Steps goes 0 -> 1).
 	StartTime *time.Time `json:"startTime,omitempty"`
 	// CompletionTime is when the WWR was marked done.
 	CompletionTime *time.Time `json:"completionTime,omitempty"`

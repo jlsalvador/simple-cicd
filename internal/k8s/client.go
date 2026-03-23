@@ -299,34 +299,25 @@ func (c *Client) DeleteWWR(namespace, name string) error {
 // Secrets (v1)
 // --------------------------------------------------------------------------
 
-// CreateSecretForJob creates a Secret in namespace with the given name (not
-// generateName) containing the HTTP request data from the WWR, already owned
-// by the specified job. This order (job first, then secret with ownerRef)
-// ensures the Secret is garbage-collected automatically when the Job is deleted.
-func (c *Client) CreateSecretForJob(
-	namespace, secretName string,
-	req types.WebhookRequestData,
-	jobName, jobUID string,
-) error {
+// CreateRequestSecret creates a Secret in namespace containing the base64-encoded
+// HTTP request data that triggered a WWR. The name is generated from webhookName
+// so it is unique without requiring a pre-flight read.
+//
+// The Secret intentionally has no ownerReference: setting one would require the
+// WWR UID, which is only available after the WWR is created (after the Secret).
+// Instead, the WWR cleanup finalizer deletes this Secret explicitly.
+//
+// Returns the actual name assigned by the API server.
+func (c *Client) CreateRequestSecret(namespace, webhookName string, req types.WebhookRequestData) (string, error) {
 	secret := map[string]any{
 		"apiVersion": "v1",
 		"kind":       "Secret",
 		"metadata": map[string]any{
-			"name":      secretName,
-			"namespace": namespace,
+			"generateName": webhookName + "-request-",
+			"namespace":    namespace,
 			"labels": map[string]any{
-				types.LabelWWRName:      jobName, // link to the owning job for observability
-				types.LabelWWRNamespace: namespace,
-			},
-			"ownerReferences": []map[string]any{
-				{
-					"apiVersion":         "batch/v1",
-					"kind":               "Job",
-					"name":               jobName,
-					"uid":                jobUID,
-					"controller":         new(true),
-					"blockOwnerDeletion": new(true),
-				},
+				types.LabelWebhookName:      webhookName,
+				types.LabelWebhookNamespace: namespace,
 			},
 		},
 		// Values are already base64-encoded by the webhook handler.
@@ -344,10 +335,114 @@ func (c *Client) CreateSecretForJob(
 	path := fmt.Sprintf("/api/v1/namespaces/%s/secrets", namespace)
 	data, status, err := c.doRequest("POST", path, secret, "application/json")
 	if err != nil {
+		return "", err
+	}
+	if status < 200 || status >= 300 {
+		return "", fmt.Errorf("POST request secret in %s: status %d: %s", namespace, status, string(data))
+	}
+	var created map[string]any
+	if err := json.Unmarshal(data, &created); err != nil {
+		return "", fmt.Errorf("unmarshal created request secret: %w", err)
+	}
+	meta, _ := created["metadata"].(map[string]any)
+	if meta == nil {
+		return "", fmt.Errorf("created request secret has no metadata")
+	}
+	name, _ := meta["name"].(string)
+	if name == "" {
+		return "", fmt.Errorf("created request secret has no name in metadata")
+	}
+	return name, nil
+}
+
+// GetSecretData returns the raw data map of a Secret. The values are
+// base64-encoded strings exactly as returned by the Kubernetes API; they can
+// be set directly as the data field of a new Secret without re-encoding.
+func (c *Client) GetSecretData(namespace, name string) (map[string]string, error) {
+	path := fmt.Sprintf("/api/v1/namespaces/%s/secrets/%s", namespace, name)
+	data, status, err := c.doRequest("GET", path, nil, "")
+	if err != nil {
+		return nil, err
+	}
+	if status < 200 || status >= 300 {
+		return nil, &StatusError{Code: status, Path: "GET " + path, Body: string(data)}
+	}
+	var obj map[string]any
+	if err := json.Unmarshal(data, &obj); err != nil {
+		return nil, fmt.Errorf("unmarshal secret %s/%s: %w", namespace, name, err)
+	}
+	rawData, _ := obj["data"].(map[string]any)
+	result := make(map[string]string, len(rawData))
+	for k, v := range rawData {
+		s, _ := v.(string)
+		result[k] = s
+	}
+	return result, nil
+}
+
+// MirrorSecret copies the data of the Secret at srcNamespace/srcName into a
+// new Secret at dstNamespace/dstName, setting the given Job as its owner.
+//
+// The ownerReference keeps the mirrored copy in the same namespace as the Job,
+// so Kubernetes GC deletes it automatically when the Job is removed. This
+// propagates the WWR request Secret into cross-namespace job pods without
+// requiring cross-namespace secret mounts.
+func (c *Client) MirrorSecret(srcNamespace, srcName, dstNamespace, dstName, jobName, jobUID string) error {
+	data, err := c.GetSecretData(srcNamespace, srcName)
+	if err != nil {
+		return fmt.Errorf("reading source secret %s/%s: %w", srcNamespace, srcName, err)
+	}
+
+	secret := map[string]any{
+		"apiVersion": "v1",
+		"kind":       "Secret",
+		"metadata": map[string]any{
+			"name":      dstName,
+			"namespace": dstNamespace,
+			"ownerReferences": []map[string]any{
+				{
+					"apiVersion":         "batch/v1",
+					"kind":               "Job",
+					"name":               jobName,
+					"uid":                jobUID,
+					"controller":         new(true),
+					"blockOwnerDeletion": new(true),
+				},
+			},
+			"labels": map[string]any{
+				types.LabelWWRName:      jobName,
+				types.LabelWWRNamespace: dstNamespace,
+			},
+		},
+		// data values are already base64-encoded; copy them verbatim.
+		"data": data,
+	}
+
+	path := fmt.Sprintf("/api/v1/namespaces/%s/secrets", dstNamespace)
+	respData, status, err := c.doRequest("POST", path, secret, "application/json")
+	if err != nil {
 		return err
 	}
 	if status < 200 || status >= 300 {
-		return fmt.Errorf("POST secret %s/%s: status %d: %s", namespace, secretName, status, string(data))
+		return fmt.Errorf("POST mirrored secret %s/%s: status %d: %s",
+			dstNamespace, dstName, status, string(respData))
+	}
+	return nil
+}
+
+// DeleteSecret deletes a Secret by namespace and name.
+// Returns nil if the Secret is already gone (404).
+func (c *Client) DeleteSecret(namespace, name string) error {
+	path := fmt.Sprintf("/api/v1/namespaces/%s/secrets/%s", namespace, name)
+	data, status, err := c.doRequest("DELETE", path, nil, "")
+	if err != nil {
+		return err
+	}
+	if status == http.StatusNotFound {
+		return nil // already deleted.
+	}
+	if status < 200 || status >= 300 {
+		return fmt.Errorf("DELETE secret %s/%s: status %d: %s", namespace, name, status, string(data))
 	}
 	return nil
 }
@@ -386,7 +481,7 @@ func (c *Client) GetJobRaw(namespace, name string) (map[string]any, error) {
 
 // CreateJobRaw posts a prepared job map and returns the name and UID assigned
 // by the API server. The UID is needed to set ownerReferences on the
-// per-job request Secret created immediately after.
+// per-job mirrored request Secret created immediately after.
 func (c *Client) CreateJobRaw(namespace string, job map[string]any) (CreatedResource, error) {
 	path := fmt.Sprintf("/apis/batch/v1/namespaces/%s/jobs", namespace)
 	data, status, err := c.doRequest("POST", path, job, "application/json")

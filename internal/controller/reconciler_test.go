@@ -149,7 +149,7 @@ func TestHandleDeletion_SameNamespaceJobsSkipped(t *testing.T) {
 	wwr := makeWWR("default", "wwr-del", "hook")
 	wwr.Metadata.Finalizers = []string{types.FinalizerCleanup}
 	wwr.Metadata.DeletionTimestamp = &now
-	// Two jobs in the SAME namespace → GC handles them, reconciler skips.
+	// Two jobs in the SAME namespace -> GC handles them, reconciler skips.
 	wwr.Status.AllJobs = []types.ResourceName{
 		{Namespace: "default", Name: "job-a"},
 		{Namespace: "default", Name: "job-b"},
@@ -163,6 +163,15 @@ func TestHandleDeletion_SameNamespaceJobsSkipped(t *testing.T) {
 
 	if len(fc.deleteJobCalls) != 0 {
 		t.Errorf("expected no DeleteJob calls for same-namespace jobs, got %v", fc.deleteJobCalls)
+	}
+	// The request Secret must be deleted regardless of whether there are
+	// cross-namespace jobs.
+	if len(fc.deleteSecretCalls) != 1 {
+		t.Errorf("expected 1 DeleteSecret call for request secret, got %d: %v",
+			len(fc.deleteSecretCalls), fc.deleteSecretCalls)
+	}
+	if fc.deleteSecretCalls[0] != "default/test-request-secret" {
+		t.Errorf("unexpected secret deleted: %q", fc.deleteSecretCalls[0])
 	}
 	if fc.patchFinalizerCalls.Load() != 1 {
 		t.Errorf("expected finalizer to be removed (1 patch call), got %d", fc.patchFinalizerCalls.Load())
@@ -191,6 +200,7 @@ func TestHandleDeletion_CrossNamespaceJobsDeleted(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
+	// Cross-namespace jobs must be explicitly deleted.
 	if len(fc.deleteJobCalls) != 2 {
 		t.Errorf("expected 2 DeleteJob calls, got %v", fc.deleteJobCalls)
 	}
@@ -198,6 +208,11 @@ func TestHandleDeletion_CrossNamespaceJobsDeleted(t *testing.T) {
 		if call == "default/job-same" {
 			t.Errorf("same-namespace job should not have been deleted explicitly")
 		}
+	}
+	// Request Secret must also be deleted.
+	if len(fc.deleteSecretCalls) != 1 {
+		t.Errorf("expected 1 DeleteSecret call, got %d: %v",
+			len(fc.deleteSecretCalls), fc.deleteSecretCalls)
 	}
 }
 
@@ -270,8 +285,11 @@ func TestReconcile_SingleJobSuccess(t *testing.T) {
 	if len(wwr.Status.CurrentJobs) != 1 {
 		t.Fatalf("expected 1 current job, got %d", len(wwr.Status.CurrentJobs))
 	}
-	if len(fc.createdSecrets) != 1 {
-		t.Errorf("expected 1 secret created, got %d", len(fc.createdSecrets))
+	// Same-namespace job: reconciler reuses the WWR's existing request Secret
+	// directly - no MirrorSecret call is expected.
+	if len(fc.mirroredSecrets) != 0 {
+		t.Errorf("expected no mirrored secrets for a same-namespace job, got %d: %v",
+			len(fc.mirroredSecrets), fc.mirroredSecrets)
 	}
 
 	// --- Tick 2: job still running -> no change ---
@@ -503,8 +521,14 @@ func TestReconcile_CrossNamespace(t *testing.T) {
 	if len(wwr.Status.AllJobs) != 1 {
 		t.Errorf("expected AllJobs to have 1 entry")
 	}
+	// Cross-namespace job: the request Secret must be mirrored into ns-b.
+	if len(fc.mirroredSecrets) != 1 {
+		t.Errorf("expected 1 mirrored secret for cross-namespace job, got %d: %v",
+			len(fc.mirroredSecrets), fc.mirroredSecrets)
+	}
 
-	// Simulate deletion: cross-namespace job must be explicitly deleted
+	// Simulate deletion: cross-namespace job must be explicitly deleted,
+	// and the request Secret must be cleaned up.
 	now := time.Now()
 	wwr.Metadata.DeletionTimestamp = &now
 	if err := r.reconcileWWR(wwr); err != nil {
@@ -512,6 +536,10 @@ func TestReconcile_CrossNamespace(t *testing.T) {
 	}
 	if len(fc.deleteJobCalls) != 1 {
 		t.Errorf("expected 1 DeleteJob call for cross-namespace job, got %v", fc.deleteJobCalls)
+	}
+	if len(fc.deleteSecretCalls) != 1 {
+		t.Errorf("expected 1 DeleteSecret call for request secret, got %d: %v",
+			len(fc.deleteSecretCalls), fc.deleteSecretCalls)
 	}
 }
 
@@ -829,11 +857,11 @@ func TestReconcile_TTLZero(t *testing.T) {
 }
 
 // --------------------------------------------------------------------------
-// generateSecretName
+// generateMirroredSecretName
 // --------------------------------------------------------------------------
 
-func TestGenerateSecretName(t *testing.T) {
-	name := generateSecretName("my-wwr")
+func TestGenerateMirroredSecretName(t *testing.T) {
+	name := generateMirroredSecretName("my-wwr")
 	if len(name) > 253 {
 		t.Errorf("secret name exceeds 253 chars: %d", len(name))
 	}
@@ -842,12 +870,12 @@ func TestGenerateSecretName(t *testing.T) {
 	}
 }
 
-func TestGenerateSecretName_LongWWRName(t *testing.T) {
+func TestGenerateMirroredSecretName_LongWWRName(t *testing.T) {
 	long := make([]byte, 300)
 	for i := range long {
 		long[i] = 'a'
 	}
-	name := generateSecretName(string(long))
+	name := generateMirroredSecretName(string(long))
 	if len(name) > 253 {
 		t.Errorf("secret name from long wwr name exceeds 253 chars: %d", len(name))
 	}
