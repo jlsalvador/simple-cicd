@@ -1,0 +1,93 @@
+{
+  "description": "Workflow defines a set of Job templates to clone and, optionally, a list of downstream Workflows to trigger once those Jobs complete. Workflows are referenced by WorkflowWebhooks and by other Workflows via their next field, forming an acyclic execution graph.\n",
+  "properties": {
+    "apiVersion": {
+      "type": "string"
+    },
+    "kind": {
+      "type": "string"
+    },
+    "metadata": {
+      "type": "object"
+    },
+    "spec": {
+      "description": "WorkflowSpec defines the desired state of a Workflow.",
+      "properties": {
+        "jobsToBeCloned": {
+          "description": "Ordered list of Job templates to clone when this Workflow is executed. At least one entry is required. Each entry may reference a Job in a different namespace; when namespace is omitted the Workflow's own namespace is used. All cloned Jobs run concurrently within the same step.\n",
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "description": "Name of the Job template to clone.",
+                "type": "string",
+                "maxLength": 253,
+                "pattern": "^[a-z0-9]([a-z0-9\\-\\.]*[a-z0-9])?$"
+              },
+              "namespace": {
+                "description": "Namespace of the Job template. Defaults to the Workflow's own namespace when omitted.\n",
+                "type": "string",
+                "maxLength": 63,
+                "pattern": "^[a-z0-9]([a-z0-9\\-]*[a-z0-9])?$"
+              }
+            },
+            "required": [
+              "name"
+            ]
+          },
+          "x-kubernetes-list-type": "atomic"
+        },
+        "next": {
+          "description": "Optional ordered list of downstream Workflows to evaluate once all Jobs in jobsToBeCloned have finished. Each entry carries a when condition; only entries whose condition is satisfied will be executed. Entries are deduplicated by namespace/name before execution.\n",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "description": "Name of the downstream Workflow to trigger.",
+                "type": "string",
+                "maxLength": 253,
+                "pattern": "^[a-z0-9]([a-z0-9\\-\\.]*[a-z0-9])?$"
+              },
+              "namespace": {
+                "description": "Namespace of the downstream Workflow. Defaults to the current Workflow's own namespace when omitted.\n",
+                "type": "string",
+                "maxLength": 63,
+                "pattern": "^[a-z0-9]([a-z0-9\\-]*[a-z0-9])?$"
+              },
+              "when": {
+                "description": "Condition that must be satisfied for this downstream Workflow to run, evaluated against the Jobs in the current step. OnSuccess    - all Jobs succeeded (zero failures). OnAnySuccess - at least one Job succeeded. OnFailure    - all Jobs failed (zero successes). OnAnyFailure - at least one Job failed. Always       - unconditional (default).\n",
+                "type": "string",
+                "default": "Always",
+                "enum": [
+                  "OnSuccess",
+                  "OnAnySuccess",
+                  "OnFailure",
+                  "OnAnyFailure",
+                  "Always"
+                ]
+              }
+            },
+            "required": [
+              "name"
+            ]
+          },
+          "x-kubernetes-list-type": "atomic"
+        },
+        "suspend": {
+          "description": "When true, this Workflow is skipped during execution: its Jobs are not cloned and its next entries are not evaluated. Defaults to false.\n",
+          "type": "boolean",
+          "default": false
+        }
+      },
+      "required": [
+        "jobsToBeCloned"
+      ],
+      "type": "object"
+    }
+  },
+  "type": "object",
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}

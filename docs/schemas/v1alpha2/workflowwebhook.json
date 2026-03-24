@@ -1,0 +1,78 @@
+{
+  "description": "WorkflowWebhook exposes an HTTP endpoint that the simple-cicd operator listens on at /{namespace}/{name}. Each incoming request creates a WorkflowWebhookRequest and triggers the configured Workflows.\n",
+  "properties": {
+    "apiVersion": {
+      "type": "string"
+    },
+    "kind": {
+      "type": "string"
+    },
+    "metadata": {
+      "type": "object"
+    },
+    "spec": {
+      "description": "WorkflowWebhookSpec defines the desired state of a WorkflowWebhook.",
+      "properties": {
+        "concurrencyPolicy": {
+          "description": "Specifies how to handle a new incoming request when one or more WorkflowWebhookRequests for this webhook are still running. Allow   - allow concurrent executions (default). Forbid  - drop the new request; it is immediately marked done. Replace - delete all running WorkflowWebhookRequests and\n          start fresh with the new one.\n",
+          "type": "string",
+          "default": "Allow",
+          "enum": [
+            "Allow",
+            "Forbid",
+            "Replace"
+          ]
+        },
+        "suspend": {
+          "description": "When true, any incoming request to this webhook is dropped: a WorkflowWebhookRequest is created but immediately marked done without executing any Workflow. Defaults to false.\n",
+          "type": "boolean",
+          "default": false
+        },
+        "ttlSecondsAfterFinished": {
+          "description": "If set, every WorkflowWebhookRequest created from this WorkflowWebhook will be automatically deleted this many seconds after it completes (successfully or not). 0 means delete immediately on completion. Omitting this field disables automatic deletion. The value is copied into the WorkflowWebhookRequest spec at creation time and is not affected by later changes to this field.\n",
+          "type": "integer",
+          "format": "int32",
+          "minimum": 0
+        },
+        "activeDeadlineSeconds": {
+          "description": "If set, every WorkflowWebhookRequest created from this WorkflowWebhook will be forcibly marked done with reason \"DeadlineExceeded\" if it is still running this many seconds after creation. The deadline is measured from metadata.creationTimestamp. Omitting this field disables the deadline. The value is copied into the WorkflowWebhookRequest spec at creation time and is not affected by later changes to this field.\n",
+          "type": "integer",
+          "format": "int32",
+          "minimum": 1
+        },
+        "workflows": {
+          "description": "Ordered list of Workflows to execute when a request arrives. All listed Workflows form the first step and run concurrently. At least one entry is required. Each entry may reference a Workflow in a different namespace; when namespace is omitted the WorkflowWebhook's own namespace is used.\n",
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "description": "Name of the Workflow to execute.",
+                "type": "string",
+                "maxLength": 253,
+                "pattern": "^[a-z0-9]([a-z0-9\\-\\.]*[a-z0-9])?$"
+              },
+              "namespace": {
+                "description": "Namespace of the Workflow. Defaults to the WorkflowWebhook's own namespace when omitted.\n",
+                "type": "string",
+                "maxLength": 63,
+                "pattern": "^[a-z0-9]([a-z0-9\\-]*[a-z0-9])?$"
+              }
+            },
+            "required": [
+              "name"
+            ]
+          },
+          "x-kubernetes-list-type": "atomic"
+        }
+      },
+      "required": [
+        "workflows"
+      ],
+      "type": "object"
+    }
+  },
+  "type": "object",
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}

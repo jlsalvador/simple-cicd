@@ -1,0 +1,238 @@
+{
+  "description": "WorkflowWebhookRequest represents a single execution triggered by an incoming HTTP request to a WorkflowWebhook endpoint. The operator creates one WorkflowWebhookRequest per incoming request, drives it through all configured Workflow steps, and marks it done when all Jobs have finished.\n",
+  "properties": {
+    "apiVersion": {
+      "type": "string"
+    },
+    "kind": {
+      "type": "string"
+    },
+    "metadata": {
+      "type": "object"
+    },
+    "spec": {
+      "description": "WorkflowWebhookRequestSpec is immutable after creation. It records the WorkflowWebhook that was triggered, a reference to the Secret holding the HTTP request data, and the TTL inherited from the WorkflowWebhook.\n",
+      "properties": {
+        "requestSecret": {
+          "description": "Reference to the Secret (in the same namespace as this WorkflowWebhookRequest) that contains the base64-encoded HTTP request data that triggered this WorkflowWebhookRequest. The Secret is created by the webhook handler before the WorkflowWebhookRequest and deleted by the cleanup finalizer when the WorkflowWebhookRequest is removed. Jobs in the same namespace mount this Secret directly. Jobs in other namespaces receive a per-job mirrored copy, owned by the Job, so it is garbage-collected automatically. All Secret keys hold base64-encoded values: body, headers, host, method, remoteAddr, timestamp, url.\n",
+          "properties": {
+            "name": {
+              "description": "Name of the request Secret.",
+              "type": "string",
+              "maxLength": 253,
+              "pattern": "^[a-z0-9]([a-z0-9\\-\\.]*[a-z0-9])?$"
+            },
+            "namespace": {
+              "description": "Namespace of the request Secret. Defaults to the WorkflowWebhookRequest's own namespace when omitted.\n",
+              "type": "string",
+              "maxLength": 63,
+              "pattern": "^[a-z0-9]([a-z0-9\\-]*[a-z0-9])?$"
+            }
+          },
+          "required": [
+            "name"
+          ],
+          "type": "object"
+        },
+        "ttlSecondsAfterFinished": {
+          "description": "If set, this WorkflowWebhookRequest will be automatically deleted this many seconds after it completes. 0 means delete immediately on completion. Omitting this field disables automatic deletion. Inherited from WorkflowWebhookSpec.ttlSecondsAfterFinished at creation time; not updated if the WorkflowWebhook changes.\n",
+          "type": "integer",
+          "format": "int32",
+          "minimum": 0
+        },
+        "activeDeadlineSeconds": {
+          "description": "If set, this WorkflowWebhookRequest will be forcibly marked done with reason \"DeadlineExceeded\" if it is still running this many seconds after creation. The deadline is measured from metadata.creationTimestamp. Omitting this field disables the deadline. Inherited from WorkflowWebhookSpec.activeDeadlineSeconds at creation time; not updated if the WorkflowWebhook changes.\n",
+          "type": "integer",
+          "format": "int32",
+          "minimum": 1
+        },
+        "workflowWebhook": {
+          "description": "Reference to the WorkflowWebhook that was triggered. The WorkflowWebhook must exist in the same namespace as this WorkflowWebhookRequest.\n",
+          "properties": {
+            "name": {
+              "description": "Name of the WorkflowWebhook.",
+              "type": "string",
+              "maxLength": 253,
+              "pattern": "^[a-z0-9]([a-z0-9\\-\\.]*[a-z0-9])?$"
+            },
+            "namespace": {
+              "description": "Namespace of the WorkflowWebhook. Defaults to the WorkflowWebhookRequest's namespace when omitted.\n",
+              "type": "string",
+              "maxLength": 63,
+              "pattern": "^[a-z0-9]([a-z0-9\\-]*[a-z0-9])?$"
+            }
+          },
+          "required": [
+            "name"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "requestSecret",
+        "workflowWebhook"
+      ],
+      "type": "object"
+    },
+    "status": {
+      "description": "WorkflowWebhookRequestStatus is written exclusively by the operator. It reflects the current execution state: which Jobs are active, cumulative success/failure counters, and lifecycle timestamps.\n",
+      "properties": {
+        "conditions": {
+          "description": "Conditions describe the latest observations of the WorkflowWebhookRequest's state. A \"Done\" condition is appended when execution finishes (successfully or not).\n",
+          "items": {
+            "properties": {
+              "lastTransitionTime": {
+                "description": "Time at which the condition last changed its status.",
+                "format": "date-time",
+                "type": "string"
+              },
+              "message": {
+                "description": "Human-readable details about the condition.",
+                "type": "string"
+              },
+              "reason": {
+                "description": "Machine-readable reason for the condition (e.g. \"Done\", \"Suspended\", \"Forbidden\", \"NoWorkflows\").\n",
+                "type": "string"
+              },
+              "status": {
+                "description": "\"True\" when the condition is active.",
+                "type": "string"
+              },
+              "type": {
+                "description": "Type of condition (e.g. \"Done\").",
+                "type": "string"
+              }
+            },
+            "required": [
+              "lastTransitionTime",
+              "message",
+              "reason",
+              "status",
+              "type"
+            ],
+            "type": "object"
+          },
+          "type": "array",
+          "x-kubernetes-list-type": "map",
+          "x-kubernetes-list-map-keys": [
+            "type"
+          ]
+        },
+        "allJobs": {
+          "description": "Accumulates every Job ever cloned for this WorkflowWebhookRequest, across all namespaces and all steps. Used by the cleanup finalizer to explicitly delete cross-namespace Jobs that Kubernetes GC cannot reach because cross-namespace ownerReferences are disallowed by design.\n",
+          "items": {
+            "properties": {
+              "name": {
+                "description": "Name of the cloned Job.",
+                "type": "string"
+              },
+              "namespace": {
+                "description": "Namespace of the cloned Job.",
+                "type": "string",
+                "default": ""
+              }
+            },
+            "required": [
+              "name"
+            ],
+            "type": "object"
+          },
+          "type": "array",
+          "x-kubernetes-list-type": "map",
+          "x-kubernetes-list-map-keys": [
+            "namespace",
+            "name"
+          ]
+        },
+        "currentJobs": {
+          "description": "Jobs currently being waited on in the active workflow step. Cleared when the step finishes and replaced by the next step's Jobs (or left empty when done).\n",
+          "items": {
+            "properties": {
+              "name": {
+                "description": "Name of the active Job.",
+                "type": "string"
+              },
+              "namespace": {
+                "description": "Namespace of the active Job.",
+                "type": "string",
+                "default": ""
+              }
+            },
+            "required": [
+              "name"
+            ],
+            "type": "object"
+          },
+          "type": "array",
+          "x-kubernetes-list-type": "map",
+          "x-kubernetes-list-map-keys": [
+            "namespace",
+            "name"
+          ]
+        },
+        "currentWorkflows": {
+          "description": "Workflows active in the current step. Each entry contributed at least one Job to currentJobs.\n",
+          "items": {
+            "properties": {
+              "name": {
+                "description": "Name of the active Workflow.",
+                "type": "string"
+              },
+              "namespace": {
+                "description": "Namespace of the active Workflow.",
+                "type": "string",
+                "default": ""
+              }
+            },
+            "required": [
+              "name"
+            ],
+            "type": "object"
+          },
+          "type": "array",
+          "x-kubernetes-list-type": "map",
+          "x-kubernetes-list-map-keys": [
+            "namespace",
+            "name"
+          ]
+        },
+        "done": {
+          "description": "True when no further Jobs remain to be executed. Once set, this field is never cleared.\n",
+          "type": "boolean",
+          "default": false
+        },
+        "failedJobs": {
+          "description": "Cumulative count of Jobs that finished with a failure condition across all completed steps.\n",
+          "type": "integer",
+          "default": 0
+        },
+        "steps": {
+          "description": "Number of workflow steps completed so far. Incremented each time the operator advances to a new set of Workflows. Zero means the WorkflowWebhookRequest has not been initialised yet.\n",
+          "type": "integer",
+          "default": 0
+        },
+        "successfulJobs": {
+          "description": "Cumulative count of Jobs that finished successfully across all completed steps.\n",
+          "type": "integer",
+          "default": 0
+        },
+        "startTime": {
+          "description": "Time at which the operator began executing the first workflow step (Steps transitioned from 0 to 1). Follows RFC 3339.\n",
+          "type": "string",
+          "format": "date-time"
+        },
+        "completionTime": {
+          "description": "Time at which the operator marked this WorkflowWebhookRequest as done. Follows RFC 3339. Together with startTime this gives the total execution duration.\n",
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "steps"
+      ],
+      "type": "object"
+    }
+  },
+  "type": "object",
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}
