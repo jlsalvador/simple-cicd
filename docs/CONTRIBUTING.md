@@ -1,10 +1,10 @@
 # Contributing to Simple CI/CD
 
-## Design rules
+## Design Rules
 
-- Keep it Simple
-- Be Explicit
-- Embrace Minimalism
+- Keep it simple
+- Be explicit
+- Embrace minimalism
 
 ---
 
@@ -16,10 +16,10 @@ You'll need a Kubernetes cluster. [minikube] or [kind] work well locally.
 # Start a local Kubernetes cluster with minikube.
 minikube start
 
-# Install Custom Resources Definitions (CRDs).
+# Install Custom Resource Definitions (CRDs).
 make install-crds
 
-# Start operator through kubectl proxy.
+# Start the operator (kubectl proxy will be launched).
 make run
 ```
 
@@ -31,7 +31,7 @@ make run
 # Start a local Kubernetes cluster with minikube.
 minikube start
 
-# Use minikube docker context.
+# Use the minikube Docker context.
 eval $(minikube docker-env)
 
 # Build an image for local development.
@@ -42,4 +42,4 @@ make helm-install IMAGE_REGISTRY=localhost VERSION=dev
 ```
 
 [minikube]: https://minikube.sigs.k8s.io
-[kind]: https://sigs.k8s.io/kind
+[kind]: https://kind.sigs.k8s.io
