@@ -28,16 +28,21 @@ $(LOCALBIN):
 ## Tool Binaries
 GOCYCLO ?= $(LOCALBIN)/gocyclo
 MISSPELL ?= $(LOCALBIN)/misspell
+YQ ?= $(LOCALBIN)/yq
 
 ## Tool Versions
 GOCYCLO_VERSION ?= latest
 MISSPELL_VERSION ?= latest
+YQ_VERSION ?= latest
 
 $(GOCYCLO): $(LOCALBIN)
 	test -s $(LOCALBIN)/gocyclo || GOBIN=$(LOCALBIN) go install github.com/fzipp/gocyclo/cmd/gocyclo@$(GOCYCLO_VERSION)
 
 $(MISSPELL): $(LOCALBIN)
 	test -s $(LOCALBIN)/misspell || GOBIN=$(LOCALBIN) go install github.com/client9/misspell/cmd/misspell@$(MISSPELL_VERSION)
+
+$(YQ): $(LOCALBIN)
+	test -s $(LOCALBIN)/yq || GOBIN=$(LOCALBIN) go install github.com/mikefarah/yq/v4@$(YQ_VERSION)
 
 ##@ General
 
@@ -243,6 +248,23 @@ stop-proxy: ## Stop the kubectl proxy started by us.
 run: proxy ## Run the operator locally, requires kubectl proxy running.
 	@KUBECTL_PROXY_URL=$(KUBECTL_PROXY_URL) go run ./cmd/operator; true
 	@$(MAKE) stop-proxy
+
+##@ Schemas
+SCHEMA_DIR = docs/schemas
+
+.PHONY: generate-schemas
+generate-schemas: $(YQ) ## Generate/Update versioned JSON Schemas (keeps old versions)
+	@mkdir -p $(SCHEMA_DIR)
+	@for crd in $(CHART_DIR)/crds/*.yaml; do \
+		kind=$$( $(YQ) '.spec.names.kind | downcase' $$crd ); \
+		versions=$$( $(YQ) '.spec.versions[].name' $$crd ); \
+		for v in $$versions; do \
+			mkdir -p $(SCHEMA_DIR)/$$v; \
+			echo "Syncing schema: $$kind ($$v)..."; \
+			$(YQ) ".spec.versions[] | select(.name == \"$$v\") | .schema.openAPIV3Schema | . + {\"\$$schema\": \"http://json-schema.org/draft-07/schema#\"}" $$crd -o=json > $(SCHEMA_DIR)/$$v/$$kind.json; \
+		done \
+	done
+	@echo "Schemas updated in $(SCHEMA_DIR). Existing versions were preserved."
 
 ##@ Cleaning
 
