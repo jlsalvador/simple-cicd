@@ -5,7 +5,7 @@
 **Manage jobs, workflows, and webhooks natively via K8s APIs.**
 
 No dependencies, no virtual machines, no Docker-in-Docker, no need to learn a
-new language or framework.
+new language or framework. Just standard K8s Jobs.
 
 ---
 
@@ -37,9 +37,8 @@ workflow that echoes "ERROR".
 
 > [!CAUTION]
 > Job templates **must** have `spec.suspend: true`. Without it,
-> Kubernetes will run the Job immediately when it is created as a template,
-> before the operator has a chance to clone it. The operator sets
-> `spec.suspend: false` on each cloned copy automatically.
+> Kubernetes will start the Job immediately. The operator automatically sets
+> `spec.suspend: false`.
 
 ```yaml
 # Job that randomly exits with code 0 or 1.
@@ -140,10 +139,7 @@ curl -XPOST http://localhost:9000/example/workflowwebhook-example
 
 Every Job cloned by the operator has the original HTTP request data mounted as
 read-only files at `/var/run/secrets/kubernetes.io/request/` inside all its
-containers. The data is stored in a Kubernetes `Secret` (named
-`{webhookName}-request-{random}` in the WWR's namespace) and either mounted
-directly for same-namespace Jobs or mirrored into the Job's own namespace for
-cross-namespace Jobs.
+containers.
 
 | File         | Content                                        |
 | ------------ | ---------------------------------------------- |
@@ -167,23 +163,58 @@ starts the reconciliation loop.
 
 ```mermaid
 flowchart TD
-    A["HTTP POST /{namespace}/{webhookName}"]
-    A --> C[Request Secret]
-    A --> B[WorkflowWebhookRequest]
+    %% Style Definitions
+    classDef trigger fill:#e3f2fd,stroke:#1e88e5,stroke-width:2px,color:#000
+    classDef k8s fill:#e8f5e9,stroke:#43a047,stroke-width:2px,color:#000
+    classDef secret fill:#fff3e0,stroke:#fb8c00,stroke-width:2px,color:#000
+    classDef decision fill:#fff9c4,stroke:#fbc02d,stroke-width:2px,color:#000
+    classDef endState fill:#ffebee,stroke:#e53935,stroke-width:2px,color:#000
+    classDef success fill:#c8e6c9,stroke:#2e7d32,stroke-width:2px,color:#000
+    classDef failure fill:#ffccbc,stroke:#d84315,stroke-width:2px,color:#000
 
-    B -->|reads| D[WorkflowWebhook]
-    D --> E[Workflow]
-    E -->|clone| F[Jobs]
-    C -->|mounted into every Job pod| F
+    A["🌐 HTTP POST<br>/{namespace}/{webhookName}"]:::trigger
 
-    F --> G{watch Job status}
+    subgraph Phase1 ["📥 Request"]
+        B["📄 WorkflowWebhookRequest"]:::k8s
+    end
 
-    G -->|success| H["next Workflow(s)<br>when: OnSuccess / Always"]
-    G -->|failure| I["next Workflow(s)<br>when: OnFailure / Always"]
+    subgraph Phase2 ["⚙️ Execution"]
+        D["🔗 WorkflowWebhook"]:::k8s
+        E["🏃 Workflow"]:::k8s
+        C[("🔐 Request Secret")]:::secret
+        F["🏗️ Jobs"]:::k8s
+    end
 
-    H --> J{more Workflows?}
+    subgraph Phase3 ["🚦 Evaluation & Control"]
+        G{"👁️ watch Job status"}:::decision
+        H["✅ next Workflow(s)<br>when: OnSuccess / Always"]:::success
+        I["❌ next Workflow(s)<br>when: OnFailure / Always"]:::failure
+        J{"🔁 more Workflows?"}:::decision
+    end
+
+    K(["🏁 WorkflowWebhookRequest done"]):::endState
+
+    %% Connections
+    A --> B
+    A --> C
+
+    B -->|reads| D
+    D --> E
+
+    %% Dependency Injection: Secret mounted into Pods
+    C -.->|mounted into every Job pod| F
+
+    E -->|clone| F
+    F --> G
+
+    G -->|success| H
+    G -->|failure| I
+
+    H --> J
     I --> J
-    J -->|no| K([WorkflowWebhookRequest done])
+
+    %% Loops and Termination
+    J -->|no| K
     J -->|yes| E
 ```
 
@@ -201,28 +232,6 @@ flowchart TD
    conditions to determine which next Workflows to trigger.
 5. Steps 3-4 repeat until no further Workflows remain, at which point the WWR
    is marked `done: true`.
-
-### Sequence diagram
-
-```mermaid
-sequenceDiagram
-  participant Client
-  participant Operator as Simple CI/CD Operator
-  participant Step1 as Step 1 Pod(s)
-  participant Step2 as Step 2 Pod(s)
-
-  Client->>Operator: HTTP POST /{namespace}/{webhookName}
-  Operator->>Operator: Create request Secret + WorkflowWebhookRequest
-  Operator->>Step1: Clone and run Workflow step 1 Job(s)
-  Step1-->>Operator: Exit status
-
-  alt next Workflow condition met
-    Operator->>Step2: Clone and run Workflow step 2 Job(s)
-    Step2-->>Operator: Exit status
-  end
-
-  Operator->>Operator: Mark WorkflowWebhookRequest as done
-```
 
 ---
 
@@ -345,6 +354,8 @@ kubectl get wwr -n example -o jsonpath='{.items[-1].status.conditions[-1]}'
 ---
 
 ## Motivation
+
+> *"Simple CI/CD doesn't try to compete with GitHub Actions in features; it competes in simplicity and low overhead."*
 
 Existing solutions either impose excessive requirements or require virtual
 machines, Docker-in-Docker, or components outside the Kubernetes ecosystem.
