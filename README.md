@@ -27,6 +27,7 @@ helm upgrade --install \
 ### Install via manifest
 
 ```sh
+kubectl apply -f https://github.com/jlsalvador/simple-cicd/releases/latest/download/crds.yaml
 kubectl apply -f https://github.com/jlsalvador/simple-cicd/releases/latest/download/operator.yaml
 ```
 
