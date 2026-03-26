@@ -7,6 +7,9 @@
 No dependencies, no virtual machines, no Docker-in-Docker, no need to learn a
 new language or framework. Just standard K8s Jobs.
 
+> [!IMPORTANT]
+> Upgrading from a previous version? Check the [Migration Guide](docs/MIGRATION.md).
+
 ---
 
 ## Getting Started
