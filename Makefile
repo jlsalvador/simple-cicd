@@ -191,19 +191,27 @@ helm-install: ## Install or Upgrade an existing chart release
 helm-uninstall: ## Uninstall the chart release (does NOT delete CRDs)
 	helm uninstall $(HELM_RELEASE) --namespace $(HELM_NAMESPACE)
 
+.PHONY: helm-crds
+helm-crds: _mkdir_build ## Bundle the three CRD files into a single bin/crds.yaml
+	@echo "---" > bin/crds.yaml
+	@cat $(CHART_DIR)/crds/workflows.yaml >> bin/crds.yaml
+	@echo "---" >> bin/crds.yaml
+	@cat $(CHART_DIR)/crds/workflowwebhooks.yaml >> bin/crds.yaml
+	@echo "---" >> bin/crds.yaml
+	@cat $(CHART_DIR)/crds/workflowwebhookrequests.yaml >> bin/crds.yaml
+	@echo "Generated bin/crds.yaml"
+
 .PHONY: helm-manifests
 helm-manifests: _mkdir_build ## Render chart into a single operator.yaml (kubectl apply -f operator.yaml)
 	helm template $(HELM_RELEASE) $(CHART_DIR) \
 		--namespace $(HELM_NAMESPACE) \
 		--set image.repository=$(IMAGE_REGISTRY)/$(IMAGE_NAME) \
 		--set image.tag=$(VERSION) \
-		--include-crds \
 		> bin/operator.yaml
 	@echo "Generated bin/operator.yaml"
 
-.PHONY: helm-package
-helm-package: _mkdir_build ## Package the chart into a .tgz in bin/
-	helm package $(CHART_DIR) --destination bin/
+.PHONY: release-assets
+release-assets: helm-crds helm-manifests ## Build bin/crds.yaml and bin/operator.yaml for a release
 
 ##@ Development
 

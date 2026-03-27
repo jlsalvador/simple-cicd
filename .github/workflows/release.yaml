@@ -6,16 +6,24 @@ on:
       - "v*.*.*"
 
 jobs:
-  docker:
-    name: Build & push multi-platform image
+  release:
+    name: Build, publish & release
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       packages: write
 
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0  # chart-releaser needs full history.
+
+      - name: Extract version from tag
+        id: version
+        run: |
+          echo "full=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          echo "semver=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v4
@@ -36,10 +44,6 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract version from tag
-        id: version
-        run: echo "value=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
-
       - name: Extract metadata for images
         id: meta
         uses: docker/metadata-action@v6
@@ -55,15 +59,53 @@ jobs:
           flavor: |
             latest=auto
 
-      - name: Build and push
+      - name: Build and push multi-platform image
         uses: docker/build-push-action@v7
         with:
           context: .
           platforms: linux/amd64,linux/arm64,linux/ppc64le,linux/s390x
           push: true
           build-args: |
-            VERSION=${{ steps.version.outputs.value }}
+            VERSION=${{ steps.version.outputs.full }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Install Helm
+        uses: azure/setup-helm@v5
+
+      - name: Bump chart version and appVersion
+        run: |
+          sed -i "s/^version:.*/version: ${{ steps.version.outputs.semver }}/" charts/operator/Chart.yaml
+          sed -i "s/^appVersion:.*/appVersion: \"${{ steps.version.outputs.full }}\"/" charts/operator/Chart.yaml
+
+      - name: Lint chart
+        run: helm lint charts/operator
+
+      - name: Generate release assets
+        run: make release-assets VERSION=${{ steps.version.outputs.full }}
+
+      - name: Configure Git for chart-releaser
+        run: |
+          git config user.name "$GITHUB_ACTOR"
+          git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
+
+      - name: Publish Helm chart
+        uses: helm/chart-releaser-action@v1.7.0
+        with:
+          charts_dir: charts
+          skip_existing: true
+        env:
+          CR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create GitHub release and upload assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ steps.version.outputs.full }}" \
+            --title "${{ steps.version.outputs.full }}" \
+            --generate-notes \
+            --verify-tag \
+            bin/crds.yaml \
+            bin/operator.yaml
