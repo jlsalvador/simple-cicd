@@ -1,5 +1,45 @@
 apiVersion: v1
 entries:
+  operator:
+  - apiVersion: v2
+    appVersion: v0.1.4
+    created: "2026-03-30T12:14:07.397929121Z"
+    description: "\U0001F680 Simple CI/CD operator for Kubernetes. Manage jobs, workflows,
+      and webhooks natively via K8s APIs."
+    digest: 3e9e1731737d07484f95b809035d4d24e7d9b4122a46cf34a3ddfcc2b1aa0f4b
+    home: https://github.com/jlsalvador/simple-cicd
+    icon: https://raw.githubusercontent.com/jlsalvador/simple-cicd/refs/heads/main/docs/img/logo.png
+    keywords:
+    - cd
+    - ci
+    - ci-cd
+    - cicd
+    - continuous-delivery
+    - continuous-integration
+    - controller
+    - k8s
+    - k8s-controller
+    - k8s-operator
+    - kubernetes
+    - kubernetes-controller
+    - kubernetes-operator
+    - operator
+    - pipeline
+    - webhook
+    - webhook-server
+    - workflow
+    - yaml
+    maintainers:
+    - email: salvador.joseluis@gmail.com
+      name: José Luis Salvador Rufo
+      url: https://github.com/jlsalvador
+    name: operator
+    sources:
+    - https://github.com/jlsalvador/simple-cicd
+    type: application
+    urls:
+    - https://github.com/jlsalvador/simple-cicd/releases/download/operator-0.1.4/operator-0.1.4.tgz
+    version: 0.1.4
   simple-cicd:
   - apiVersion: v2
     appVersion: 0.0.7
@@ -37,4 +77,4 @@ entries:
     urls:
     - https://github.com/jlsalvador/simple-cicd/releases/download/simple-cicd-0.0.3/simple-cicd-0.0.3.tgz
     version: 0.0.3
-generated: "2023-11-01T07:26:23.681737663Z"
+generated: "2026-03-30T12:14:07.397937974Z"
