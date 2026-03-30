@@ -69,14 +69,33 @@ changes introduced in `v1alpha2` of the Simple CI/CD CRDs.
    ```
 
 4. **Cleanup v1alpha1 legacy resources.**
-   Remove the old installation to avoid "ghost" resources.
+   Remove the old CRDs:
 
    ```sh
-   kubectl delete -k 'github.com/jlsalvador/simple-cicd/config/default?ref=stable'
+   kubectl delete crd workflows.simple-cicd.jlsalvador.online workflowwebhooks.simple-cicd.jlsalvador online workflowwebhookrequests.simple-cicd.jlsalvador.online
+   ```
+
+   Remove the old installation.
+
+   ```sh
+   kubectl delete ns simple-cicd-system
    ```
 
 5. **Apply new CRDs and Operator.**
    Apply the `v1alpha2` CRDs and the new operator manifest.
+   You can install via Helm or by applying the manifest directly.
+
+   ### Install via Helm (recommended)
+
+   ```sh
+   helm upgrade --install \
+      --create-namespace \
+      --namespace simple-cicd \
+      --repo https://jlsalvador.github.io/simple-cicd \
+      operator operator
+   ```
+
+   ### Install via manifest
 
    ```sh
    # Apply CRDs
