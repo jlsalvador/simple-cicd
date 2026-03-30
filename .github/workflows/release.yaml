@@ -63,6 +63,7 @@ jobs:
         uses: docker/build-push-action@v7
         with:
           context: .
+          file: Dockerfile.operator
           platforms: linux/amd64,linux/arm64,linux/ppc64le,linux/s390x
           push: true
           build-args: |
