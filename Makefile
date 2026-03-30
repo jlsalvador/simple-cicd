@@ -1,6 +1,7 @@
 # Version is read from the latest git tag (e.g. v1.2.3).
 # Override with: make build VERSION=v0.0.1
 VERSION         ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
+VERSION_SEMVER  := $(patsubst v%,%,$(VERSION))
 VERSION_PKG     := github.com/jlsalvador/simple-cicd/internal/version
 LDFLAGS         := -s -w -X $(VERSION_PKG).Version=$(VERSION)
 GOFLAGS         ?= -trimpath -ldflags="$(LDFLAGS)"
@@ -176,7 +177,7 @@ helm-template: ## Render chart templates to stdout (dry-run)
 	helm template $(HELM_RELEASE) $(CHART_DIR) \
 		--namespace $(HELM_NAMESPACE) \
 		--set image.repository=$(IMAGE_REGISTRY)/$(IMAGE_NAME) \
-		--set image.tag=$(VERSION)
+		--set image.tag=$(VERSION_SEMVER)
 
 .PHONY: helm-install
 helm-install: ## Install or Upgrade an existing chart release
@@ -185,7 +186,7 @@ helm-install: ## Install or Upgrade an existing chart release
 		--namespace $(HELM_NAMESPACE) \
 		--create-namespace \
 		--set image.repository=$(IMAGE_REGISTRY)/$(IMAGE_NAME) \
-		--set image.tag=$(VERSION)
+		--set image.tag=$(VERSION_SEMVER)
 
 .PHONY: helm-uninstall
 helm-uninstall: ## Uninstall the chart release (does NOT delete CRDs)
@@ -206,7 +207,7 @@ helm-manifests: _mkdir_build ## Render chart into a single operator.yaml (kubect
 	helm template $(HELM_RELEASE) $(CHART_DIR) \
 		--namespace $(HELM_NAMESPACE) \
 		--set image.repository=$(IMAGE_REGISTRY)/$(IMAGE_NAME) \
-		--set image.tag=$(VERSION) \
+		--set image.tag=$(VERSION_SEMVER) \
 		> bin/operator.yaml
 	@echo "Generated bin/operator.yaml"
 
