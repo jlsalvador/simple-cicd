@@ -3,8 +3,8 @@ name: operator
 description:  🚀 Simple CI/CD operator for Kubernetes. Manage jobs, workflows, and webhooks natively via K8s APIs.
 type: application
 # Chart version and appVersion are kept in sync with the git tag.
-version: 0.1.4
-appVersion: "v0.1.4"
+version: 0.1.5
+appVersion: "v0.1.5"
 keywords:
   - cd
   - ci
