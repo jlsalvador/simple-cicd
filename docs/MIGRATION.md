@@ -69,6 +69,7 @@ changes introduced in `v1alpha2` of the Simple CI/CD CRDs.
    ```
 
 4. **Cleanup v1alpha1 legacy resources.**
+
    Remove the old CRDs:
 
    ```sh
