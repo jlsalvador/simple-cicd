@@ -1,218 +1,375 @@
-# Simple CI/CD Operator for Kubernetes
+# Simple CI/CD
 
-![Simple CI/CD Logo](img/logo.png)
+![Simple CI/CD Logo](https://media.githubusercontent.com/media/jlsalvador/simple-cicd/refs/heads/main/docs/img/logo.png)
 
-The Simple CI/CD operator for Kubernetes empowers users to create workflows triggered by webhooks, facilitating the orchestration of Kubernetes Jobs according to specific requirements.
+**Manage jobs, workflows, and webhooks natively via K8s APIs.**
 
+No dependencies, no virtual machines, no Docker-in-Docker, no need to learn a
+new language or framework. Just standard K8s Jobs.
 
-## Table of Contents
-1. [Getting Started](#getting-started)
-2. [Description](#description)
-3. [Contributing](#contributing)
-4. [License](#license)
+> [!IMPORTANT]
+> Upgrading from a previous version? Check the [Migration Guide](docs/MIGRATION.md).
 
+---
 
 ## Getting Started
 
-### Installation by Manifest
-
-To install Simple CI/CD directly from the internet, use the following command:
+### Install via Helm (recommended)
 
 ```sh
-kubectl apply -k 'github.com/jlsalvador/simple-cicd/config/default?ref=stable'
+helm upgrade --install \
+  --create-namespace \
+  --namespace simple-cicd \
+  --repo https://jlsalvador.github.io/simple-cicd \
+  operator operator
 ```
 
-If you have forked the Simple CI/CD repository and want to install it from your local copy, use the following command:
+### Install via manifest
 
 ```sh
-kubectl apply -k config/default
+kubectl apply -f https://github.com/jlsalvador/simple-cicd/releases/latest/download/crds.yaml
+kubectl apply -f https://github.com/jlsalvador/simple-cicd/releases/latest/download/operator.yaml
 ```
 
-### Installation by Helm
+---
 
-```sh
-helm upgrade --install --create-namespace --namespace simple-cicd --repo https://jlsalvador.github.io/simple-cicd simple-cicd simple-cicd
-```
+## Example
 
+This example creates a workflow that runs a job, echoing the original HTTP
+request and returning a random exit code. On failure, it triggers a second
+workflow that echoes "ERROR".
 
-## Description
-
-Simple CI/CD offers users the ability to trigger Kubernetes Jobs through webhooks, providing control over <ins>when</ins> and <ins>how</ins> multiple Jobs and their dependencies are executed.
-
-### Features
-
-- Easy to understand
-- Uses standard Kubernetes resources
-- No external cloud dependencies
-- Low resource usage
-
-### Custom Resource Definitions
-
-- **Workflow**: Responsible for cloning Jobs and triggering subsequent Workflows based on the exit status of completed Jobs.
-- **WorkflowWebhook**: Serves as the trigger for Workflows, allowing the Simple CI/CD operator to listen for HTTP requests on a path named as the WorkflowWebhook (`/namespace/name`).
-- **WorkflowWebhookRequest**: Initiates WorkflowWebhooks.
-
-### Example:
-
-In this example, we demonstrate the Simple CI/CD system's functionality:
-
-1. **Receive HTTP Request**: The Simple CI/CD operator receives an HTTP request.
-
-2. **Create a Random Exit Pod**: A Kubernetes pod is created, which generates a random exit code (either 0 or 1) upon execution.
-
-3. **Error Handling**: If the previous pod's exit status indicates a failure (1), the system initiates another pod that echoes the content of the original HTTP request.
-
-```mermaid
-sequenceDiagram
-  participant User as User
-  participant Ingress as Ingress Controller
-  participant SimpleCI/CD as Simple CI/CD Operator
-  participant Pod1 as "Random Exit" Pod
-  participant Pod2 as "Error Handling" Pod
-
-  User->>Ingress: HTTP Request (Outside Cluster)
-  Ingress->>SimpleCI/CD: HTTP Request
-  SimpleCI/CD->>Pod1: Create Random Exit Pod
-  Note right of Pod1: Generates Random Exit Code (0 or 1)
-  Pod1-->>SimpleCI/CD: Exit Status (0 or 1)
-
-  alt Exit Status = 1 (KO)
-    SimpleCI/CD->>Pod2: Create Error Handling Pod
-    Pod2-->>SimpleCI/CD: Echo HTTP Request
-  end
-
-  SimpleCI/CD-->>Ingress: HTTP Response
-  Ingress-->>User: HTTP Response (Outside Cluster)
-```
+> [!CAUTION]
+> Job templates **must** have `spec.suspend: true`. Without it,
+> Kubernetes will start the Job immediately. The operator automatically sets
+> `spec.suspend: false`.
 
 ```yaml
-# Job that randomly exits with code 0 or 1 (OK or Error)
+# Job that randomly exits with code 0 or 1.
 apiVersion: batch/v1
 kind: Job
 metadata:
   name: job-example-random-exit
+  namespace: example
 spec:
-  suspend: true # Required to be true to disallow Kubernetes to start this job when it will be created
-  backoffLimit: 0 # If this Job fail do not try to run it again
+  suspend: true # Prevents Kubernetes from running this directly.
+  backoffLimit: 0
   template:
     spec:
       containers:
         - name: random-exit
           image: bash
-          command: ["sh", "-c", "exit $$(($RANDOM % 2))"] # Sometimes will fails
-      restartPolicy: Never # Do not re-run the pod if something fails
+          command: ["sh", "-c", "exit $$(($RANDOM % 2))"]
+        - name: echo-request
+          image: bash
+          command:
+            - sh
+            - -c
+            - |
+              echo "Host:       $(cat /var/run/secrets/kubernetes.io/request/host)"
+              echo "Headers:    $(cat /var/run/secrets/kubernetes.io/request/headers)"
+              echo "Method:     $(cat /var/run/secrets/kubernetes.io/request/method)"
+              echo "URL:        $(cat /var/run/secrets/kubernetes.io/request/url)"
+              echo "RemoteAddr: $(cat /var/run/secrets/kubernetes.io/request/remoteAddr)"
+              echo "Timestamp:  $(cat /var/run/secrets/kubernetes.io/request/timestamp)"
+              echo "Body:       $(cat /var/run/secrets/kubernetes.io/request/body)"
+      restartPolicy: Never # Do not re-run the pod if something fails.
 ---
-# Job that echoes "ERROR"
+# Job that echoes "ERROR".
 apiVersion: batch/v1
 kind: Job
 metadata:
   name: job-example-error
-  namespace: default # Job namespace. Optional
+  namespace: example
 spec:
-  suspend: true # Required to be true to disallow Kubernetes to start this job when it will be created
+  suspend: true
   template:
     spec:
       containers:
         - name: error
           image: bash
           command: ["echo", "ERROR"]
-        - name: echo-request
-          image: bash
-          command:
-            - cat # Simple CI/CD will mounts the next request payloads inside all Pods
-            - /var/run/secrets/kubernetes.io/request/body
-            - /var/run/secrets/kubernetes.io/request/headers
-            - /var/run/secrets/kubernetes.io/request/host
-            - /var/run/secrets/kubernetes.io/request/method
-            - /var/run/secrets/kubernetes.io/request/url
-      restartPolicy: Never # Do not re-run the pod if something fails
+      restartPolicy: Never
 ---
-# Workflow that will clones the "job-example-error" Job
-apiVersion: simple-cicd.jlsalvador.online/v1alpha1
+# Workflow triggered on failure: runs job-example-error.
+apiVersion: simple-cicd.jlsalvador.online/v1alpha2
 kind: Workflow
 metadata:
-  name: workflow-example-some-failures
-  namespace: default # Workflow namespace. Optional.
+  name: workflow-example-on-failure
+  namespace: example
 spec:
   jobsToBeCloned:
-    - name: job-example-error # Job name that will cloned
-      namespace: default # Job namespace. Optional.
+    - name: job-example-error
 ---
-# Workflow that will clones the "job-example-random-exit" Job and
-# triggers the "workflow-example-some-failures" Workflow on any Job failure
-apiVersion: simple-cicd.jlsalvador.online/v1alpha1
+# Main workflow: runs job-example-random-exit, then workflow-example-on-failure on any failure.
+apiVersion: simple-cicd.jlsalvador.online/v1alpha2
 kind: Workflow
 metadata:
   name: workflow-example
+  namespace: example
 spec:
   jobsToBeCloned:
-    - name: job-example-random-exit # Job name that will cloned
+    - name: job-example-random-exit
   next:
-    - name: workflow-example-some-failures
-      namespace: default # Workflow namespace. Optional.
-      when: OnAnyFailure # Only run this Workflow if some of the jobsToBeCloned fails
+    - name: workflow-example-on-failure
+      when: OnAnyFailure
 ---
-# WorkflowWebhook set the simple-cicd operator to listen for requests on the path "$namespace/$name"
-apiVersion: simple-cicd.jlsalvador.online/v1alpha1
+# WorkflowWebhook: listens on /example/workflowwebhook-example.
+apiVersion: simple-cicd.jlsalvador.online/v1alpha2
 kind: WorkflowWebhook
 metadata:
   name: workflowwebhook-example
+  namespace: example
 spec:
   workflows:
-    - name: workflow-example # Workflow that will be initiated
----
-# Optional, recommended for public requests.
-# Secret for the next Ingress, recommended for preventing undesired requests.
-apiVersion: v1
-kind: Secret
-metadata:
-  name: basic-auth-example
-  namespace: simple-cicd-system # Namespace where the ingress-example is deployed
-type: Opaque
-stringData:
-  auth: |
-    # user:pass
-    user:$apr1$j.P.ucaS$hHtkMN19glS9.ffLns2Eh/
----
-# Optional, allows external requests from the cluster.
-# Public Ingress listening at http://example.org/default/workflowwebhook-example with basic authorization.
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: ingress-example
-  namespace: simple-cicd-system # Namespace where the simple-cicd-controller-manager is deployed
-  annotations:
-    nginx.ingress.kubernetes.io/auth-type: basic
-    nginx.ingress.kubernetes.io/auth-secret: basic-auth-example
-spec:
-  ingressClassName: nginx
-  rules:
-    - host: example.org
-      http:
-        paths:
-          - path: /default/workflowwebhook-example # The WorkflowWebhook namespace/name
-            pathType: Prefix
-            backend:
-              service:
-                name: simple-cicd-controller-manager # The simple-cicd operator service name
-                port:
-                  name: http
+    - name: workflow-example
+  ttlSecondsAfterFinished: 3600 # Clean up WWRs after 1 hour.
 ```
+
+Trigger the WorkflowWebhook via `kubectl port-forward`:
 
 ```sh
-# To trigger the WorkflowWebhook from outside the cluster:
-curl -u user:pass http://example.org/default/workflowwebhook-sample
-
-# To trigger the WorkflowWebhook from inside the cluster:
-curl http://simple-cicd-controller-manager.simple-cicd-system:9000/default/workflowwebhook-sample
+kubectl -n simple-cicd port-forward svc/operator 9000:9000 &
+curl -XPOST http://localhost:9000/example/workflowwebhook-example
 ```
 
-### Motivation
+> [!TIP]
+> You can also reach the operator directly from within the cluster or expose it
+> through any Service. Remember to set up proper authentication & authorization.
 
-The motivation behind developing Simple CI/CD arises from the need for a tool that aligns with specific requirements, as outlined in the table below. Existing solutions either impose excessive requirements or fail to meet desired expectations. The primary objective is to launch Jobs within the Kubernetes environment using webhooks to control timing and execution, without the need for virtual machines, Docker-in-Docker configurations, external dependencies, or components external to the Kubernetes ecosystem.
+---
 
+## Request Data in Jobs
+
+Every Job cloned by the operator has the original HTTP request data mounted as
+read-only files at `/var/run/secrets/kubernetes.io/request/` inside all its
+containers.
+
+| File         | Content                                        |
+| ------------ | ---------------------------------------------- |
+| `body`       | Request body                                   |
+| `headers`    | All headers serialised as JSON                 |
+| `host`       | Host header value                              |
+| `method`     | HTTP method (`GET`, `POST`, …)                 |
+| `url`        | Full request URL                               |
+| `remoteAddr` | Client IP and port (e.g. `10.0.0.5:54321`)     |
+| `timestamp`  | Time the request was received (UNIX timestamp) |
+
+---
+
+## How It Works
+
+Simple CI/CD follows the Kubernetes [Operator pattern].
+
+The operator exposes an HTTP server on port `9000`. Each incoming request to
+`/{namespace}/{workflowWebhookName}` creates a `WorkflowWebhookRequest` and
+starts the reconciliation loop.
+
+```mermaid
+flowchart TD
+    %% Style Definitions
+    classDef trigger fill:#e3f2fd,stroke:#1e88e5,stroke-width:2px,color:#000
+    classDef k8s fill:#e8f5e9,stroke:#43a047,stroke-width:2px,color:#000
+    classDef secret fill:#fff3e0,stroke:#fb8c00,stroke-width:2px,color:#000
+    classDef decision fill:#fff9c4,stroke:#fbc02d,stroke-width:2px,color:#000
+    classDef endState fill:#ffebee,stroke:#e53935,stroke-width:2px,color:#000
+    classDef success fill:#c8e6c9,stroke:#2e7d32,stroke-width:2px,color:#000
+    classDef failure fill:#ffccbc,stroke:#d84315,stroke-width:2px,color:#000
+
+    A["🌐 HTTP POST<br>/{namespace}/{webhookName}"]:::trigger
+
+    subgraph Phase1 ["📥 Request"]
+        B["📄 WorkflowWebhookRequest"]:::k8s
+    end
+
+    subgraph Phase2 ["⚙️ Execution"]
+        D["🔗 WorkflowWebhook"]:::k8s
+        E["🏃 Workflow"]:::k8s
+        C[("🔐 Request Secret")]:::secret
+        F["🏗️ Jobs"]:::k8s
+    end
+
+    subgraph Phase3 ["🚦 Evaluation & Control"]
+        G{"👁️ watch Job status"}:::decision
+        H["✅ next Workflow(s)<br>when: OnSuccess / Always"]:::success
+        I["❌ next Workflow(s)<br>when: OnFailure / Always"]:::failure
+        J{"🔁 more Workflows?"}:::decision
+    end
+
+    K(["🏁 WorkflowWebhookRequest done"]):::endState
+
+    %% Connections
+    A --> B
+    A --> C
+
+    B -->|reads| D
+    D --> E
+
+    %% Dependency Injection: Secret mounted into Pods
+    C -.->|mounted into every Job pod| F
+
+    E -->|clone| F
+    F --> G
+
+    G -->|success| H
+    G -->|failure| I
+
+    H --> J
+    I --> J
+
+    %% Loops and Termination
+    J -->|no| K
+    J -->|yes| E
+```
+
+### Reconciliation loop
+
+1. A webhook HTTP request arrives. The operator creates a `Secret` containing
+   the request data and a `WorkflowWebhookRequest` (WWR) referencing it.
+2. The reconciler reads the WWR, resolves the referenced `WorkflowWebhook` and
+   its `Workflow` list.
+3. For each active Workflow, referenced Jobs are cloned. Jobs in the same
+   namespace as the WWR mount the request Secret directly. Jobs in other
+   namespaces receive a per-job mirrored copy of the Secret, owned by the Job
+   and automatically garbage-collected when the Job is deleted.
+4. The reconciler polls cloned Jobs until all finish, then evaluates `when`
+   conditions to determine which next Workflows to trigger.
+5. Steps 3-4 repeat until no further Workflows remain, at which point the WWR
+   is marked `done: true`.
+
+---
+
+## Custom Resources
+
+### Workflow
+
+Defines which Jobs to clone and which Workflows to trigger next based on exit
+status.
+
+```yaml
+apiVersion: simple-cicd.jlsalvador.online/v1alpha2
+kind: Workflow
+metadata:
+  name: my-workflow
+  namespace: example
+spec:
+  jobsToBeCloned:
+    - name: my-job
+      namespace: example # Defaults to the Workflow's own namespace when omitted.
+  next:
+    - name: my-next-workflow
+      when: OnAnyFailure # OnSuccess | OnAnySuccess | OnFailure | OnAnyFailure | Always
+  suspend: false # Set to true to skip execution without deleting.
+```
+
+### WorkflowWebhook
+
+Binds an HTTP path to one or more Workflows and controls concurrency and
+lifecycle policies. All policy fields are copied into each
+`WorkflowWebhookRequest` at creation time and are not affected by later changes
+to the `WorkflowWebhook`.
+
+```yaml
+apiVersion: simple-cicd.jlsalvador.online/v1alpha2
+kind: WorkflowWebhook
+metadata:
+  name: my-webhook
+  namespace: example
+spec:
+  workflows:
+    - name: my-workflow
+      namespace: example   # Defaults to the WorkflowWebhook's own namespace when omitted.
+  concurrencyPolicy: Allow # Allow | Forbid | Replace
+  suspend: false
+  ttlSecondsAfterFinished: 3600 # Delete the WWR 1 hour after it finishes. Omit to keep it forever.
+  activeDeadlineSeconds: 1800   # Mark the WWR done after 30 min if still running. Omit to disable.
+```
+
+#### Concurrency policies
+
+| Policy    | Behaviour                                       |
+| --------- | ----------------------------------------------- |
+| `Allow`   | Multiple WWRs can run simultaneously (default). |
+| `Forbid`  | Creates the WWR without executing any Workflow. |
+| `Replace` | Deletes any running WWR and starts a fresh one. |
+
+> [!NOTE]
+> With `Forbid`, the HTTP response is still `202 Accepted`. The WWR
+> is created and immediately marked done. Inspect `status.conditions` to
+> determine whether execution was actually skipped.
+
+#### `when` conditions
+
+| Value          | Trigger condition                        |
+| -------------- | ---------------------------------------- |
+| `OnSuccess`    | All Jobs in the step succeeded (default) |
+| `OnAnySuccess` | At least one Job succeeded               |
+| `OnFailure`    | All Jobs in the step failed              |
+| `OnAnyFailure` | At least one Job failed                  |
+| `Always`       | Always trigger regardless of outcome     |
+
+#### `ttlSecondsAfterFinished`
+
+When set, the operator automatically deletes the WWR the specified number of
+seconds after it completes. `0` means delete immediately on completion. Omitting
+the field keeps the WWR indefinitely.
+
+#### `activeDeadlineSeconds`
+
+When set, the operator forcibly terminates all running Jobs and marks the WWR
+done with reason `DeadlineExceeded` if it has not completed within the specified
+number of seconds of its creation. Omitting the field disables the deadline.
+
+> [!NOTE]
+> `activeDeadlineSeconds` is measured from `metadata.creationTimestamp`, not
+> from when execution actually started, making it a hard wall-clock limit on
+> the total time a request may occupy the system.
+
+### WorkflowWebhookRequest
+
+Created automatically by the operator on each incoming HTTP request. Tracks the
+full execution lifecycle.
+
+```sh
+kubectl get wwr -n example
+
+NAME                            DONE   WEBHOOK                   SUCCESSFUL JOBS   FAILED JOBS   AGE
+workflowwebhook-example-b5lmh   true   workflowwebhook-example   1                 0             76s
+workflowwebhook-example-lw2ws   true   workflowwebhook-example   1                 1             12m
+```
+
+#### Status conditions
+
+The `status.conditions` field records lifecycle events. The most recent
+condition reflects the final outcome:
+
+| `reason`           | Meaning                           |
+| ------------------ | --------------------------------- |
+| `Done`             | All Workflows completed normally. |
+| `Suspended`        | No Workflows were executed.       |
+| `Forbidden`        | Another WWR was running.          |
+| `NoWorkflows`      | Nothing to execute.               |
+| `DeadlineExceeded` | Running Jobs were terminated.     |
+
+```sh
+kubectl get wwr -n example -o jsonpath='{.items[-1].status.conditions[-1]}'
+```
+
+---
+
+## Motivation
+
+> *"Simple CI/CD doesn't try to compete with GitHub Actions in features; it competes in simplicity and low overhead."*
+
+Existing solutions either impose excessive requirements or require virtual
+machines, Docker-in-Docker, or components outside the Kubernetes ecosystem.
+
+Simple CI/CD uses native Kubernetes Jobs, so you do not need to learn a new
+language.
+
+<!-- markdownlint-disable MD033 -->
 <table>
-  <caption>Disclaimer: Based in my personal opinion. Please, do your own investigations.</caption>
+  <caption>Disclaimer: based on personal opinion. Please do your own research.</caption>
   <thead>
     <tr>
       <th>Alternative</th>
@@ -222,212 +379,94 @@ The motivation behind developing Simple CI/CD arises from the need for a tool th
   </thead>
   <tbody>
     <tr>
-      <td>
-        <a href="https://github.com/features/actions">Github Actions</a>
-      </td>
-      <td>
-        <ul>
-          <li>De-facto CI/CD for public GIT repositories at <a href="https://github.com">Github</a>.</li>
-        </ul>
-      </td>
-      <td>
-        <ul>
-          <li>Supported by <a href="https://microsoft.com">Microsoft</a>.</li>
-          <li>Closed garden.</li>
-          <li>Actions requires to be public publishing.</li>
-          <li>Limited by a paywall.</li>
-          <li>Not suitable for air-gap environments or private clusters.</li>
-        </ul>
-      </td>
+      <td><a href="https://github.com/features/actions">GitHub Actions</a></td>
+      <td><ul>
+        <li>De-facto standard for public repositories on GitHub.</li>
+      </ul></td>
+      <td><ul>
+        <li>Controlled by Microsoft.</li>
+        <li>Closed garden.</li>
+        <li>Actions must be published publicly.</li>
+        <li>Limited by a paywall.</li>
+        <li>Not suitable for air-gap environments or private clusters.</li>
+      </ul></td>
     </tr>
     <tr>
-      <td>
-        <a href="https://www.jenkins.io">Jenkins</a>
-      </td>
-      <td>
-        <ul>
-          <li>Open-source.</li>
-          <li>Supported by the community and company foundations.</li>
-          <li>Stable and real-world tested.</li>
-        </ul>
-      </td>
-      <td>
-        <ul>
-          <li>Resource hungry.</li>
-          <li>Requires Groovy for advanced tasks.</li>
-          <li>Requires addons for Kubernetes.</li>
-          <li>Limited CLI support.</li>
-        </ul>
-      </td>
+      <td><a href="https://www.jenkins.io">Jenkins</a></td>
+      <td><ul>
+        <li>Open-source.</li>
+        <li>Mature and battle-tested.</li>
+        <li>Backed by a broad community.</li>
+      </ul></td>
+      <td><ul>
+        <li>Resource hungry.</li>
+        <li>Requires Groovy for advanced pipelines.</li>
+        <li>Needs add-ons for Kubernetes integration.</li>
+        <li>Limited CLI support.</li>
+      </ul></td>
     </tr>
     <tr>
-      <td>
-        <a href="https://tekton.dev">Tekton</a>
-      </td>
-      <td>
-        <ul>
-          <li>Open-source.</li>
-          <li>Supported by <a href="https://cd.foundation">CD Foundation</a>.</li>
-        </ul>
-      </td>
-      <td>
-        <ul>
-          <li>Can not use more than one PersistentVolume on the same Pod.</li>
-          <li>Deprecated tasks from Catalog because its new on-going API version.</li>
-        </ul>
-      </td>
+      <td><a href="https://tekton.dev">Tekton</a></td>
+      <td><ul>
+        <li>Open-source.</li>
+        <li>Backed by the <a href="https://cd.foundation">CD Foundation</a>.</li>
+      </ul></td>
+      <td><ul>
+        <li>Cannot use more than one PersistentVolume per Pod.</li>
+        <li>Frequent API churn leading to deprecated Catalog tasks.</li>
+      </ul></td>
     </tr>
     <tr>
-      <td>
-        <a href="https://drone.io">Drone</a>
-      </td>
-      <td>
-        <ul>
-          <li>Open-source.</li>
-        </ul>
-      </td>
-      <td>
-        <ul>
-          <li>Supported by <a href="https://www.harness.io">Harness</a>.</li>
-          <li>Limited community pull requests support. Personal example: <a href="https://github.com/harness/gitness/pull/3030">https://github.com/harness/gitness/pull/3030</a></li>
-        </ul>
-      </td>
+      <td><a href="https://drone.io">Drone</a></td>
+      <td><ul>
+        <li>Open-source.</li>
+      </ul></td>
+      <td><ul>
+        <li>Controlled by <a href="https://www.harness.io">Harness</a>.</li>
+        <li>Community pull requests receive limited attention.</li>
+      </ul></td>
     </tr>
     <tr>
-      <td>
-        <a href="https://woodpecker-ci.org">Woodpecker CI</a>
-      </td>
-      <td>
-        <ul>
-          <li>Open-source (community fork of Drone).</li>
-          <li>Supported by the community.</li>
-        </ul>
-      </td>
-      <td>
-        <ul>
-          <li>Forget about namespaced PersistentVolume for multiples tasks.</li>
-          <li>Limited Kubernetes support.</li>
-        </ul>
-      </td>
+      <td><a href="https://woodpecker-ci.org">Woodpecker CI</a></td>
+      <td><ul>
+        <li>Open-source community fork of Drone.</li>
+        <li>Community supported.</li>
+      </ul></td>
+      <td><ul>
+        <li>No namespaced PersistentVolume support across tasks.</li>
+        <li>Limited Kubernetes support.</li>
+      </ul></td>
     </tr>
     <tr>
-      <td>
-        <a href="https://gitea.com/gitea/act_runner">Gitea act_runner</a>
-      </td>
-      <td>
-        <ul>
-          <li>Community effort for on-premise Github Actions.</li>
-        </ul>
-      </td>
-      <td>
-        <ul>
-          <li>Requires Virtual Machine-like setup, as Github Actions.</li>
-          <li>Lacks Kubernetes integrations.</li>
-        </ul>
-      </td>
+      <td><a href="https://gitea.com/gitea/act_runner">Gitea act_runner</a></td>
+      <td><ul>
+        <li>Community effort for on-premise GitHub Actions compatibility.</li>
+      </ul></td>
+      <td><ul>
+        <li>Requires a VM-like environment, as GitHub Actions does.</li>
+        <li>No native Kubernetes integration.</li>
+      </ul></td>
     </tr>
     <tr>
-      <td>
-        <a href="https://github.com/jlsalvador/simple-cicd">Simple CI/CD</a>
-      </td>
-      <td>
-        <ul>
-          <li>Open-source.</li>
-          <li>Supported by the community.</li>
-          <li>Simple.</li>
-          <li>Kubernetes native component as an operator.</li>
-          <li>Platform agnostic (cloud, on-premise, hybrid).</li>
-          <li>Low resource usage (around 32Mb RAM).</li>
-        </ul>
-      </td>
-      <td>
-        <ul>
-          <li>Experimental and not yet real-world tested.</li>
-          <li>Maintained by a single individual.</li>
-          <li>No web interface (yet).</li>
-        </ul>
-      </td>
+      <td><a href="https://github.com/jlsalvador/simple-cicd">Simple CI/CD</a></td>
+      <td><ul>
+        <li>Open-source.</li>
+        <li>Kubernetes-native operator.</li>
+        <li>Platform agnostic (cloud, on-premise, hybrid, air-gap).</li>
+        <li>No external dependencies.</li>
+        <li>Low resource usage (~8 MB RAM).</li>
+      </ul></td>
+      <td><ul>
+        <li>Experimental; not yet battle-tested in production.</li>
+        <li>Maintained by a single individual.</li>
+        <li>No web UI (yet).</li>
+      </ul></td>
     </tr>
   </tbody>
 </table>
+<!-- markdownlint-enable MD033 -->
 
-
-## Contributing
-
-### Design rules
-
-- Keep it Simple
-- Be Explicit
-- Embrace Minimalism
-
-### How it works
-
-This project aims to follow the Kubernetes [Operator pattern](https://kubernetes.io/docs/concepts/extend-kubernetes/operator/).
-
-It uses [Controllers](https://kubernetes.io/docs/concepts/architecture/controller/),
-which provide a reconcile function responsible for synchronizing resources until the desired state is reached on the cluster.
-
-You’ll need a Kubernetes cluster to run against. You can use [KIND](https://sigs.k8s.io/kind) to get a local cluster for testing, or run against a remote cluster.
-**Note:** Your controller will automatically use the current context in your kubeconfig file (i.e. whatever cluster `kubectl cluster-info` shows).
-
-### Test It Out
-
-1. Install the CRDs into your cluster:
-
-```sh
-make install
-```
-
-2. Run your controller (this will run in the foreground, so switch to a new terminal if you want to leave it running):
-
-```sh
-make run
-```
-
-**NOTE:** You can also run this in one step by running: `make install run`
-
-### Running on the cluster
-
-1. Build and push your image to the location specified by `IMG`:
-
-```sh
-make docker-build docker-push IMG=<some-registry>/simple-cicd:tag
-```
-
-2. Deploy the controller to the cluster with the image specified by `IMG`:
-
-```sh
-make deploy IMG=<some-registry>/simple-cicd:tag
-```
-
-### Uninstall CRDs
-
-To delete the CRDs from the cluster:
-
-```sh
-make uninstall
-```
-
-### Undeploy controller
-
-UnDeploy the controller from the cluster:
-
-```sh
-make undeploy
-```
-
-### Modifying the API definitions
-
-If you are editing the API definitions, generate the manifests such as CRs or CRDs using:
-
-```sh
-make manifests
-```
-
-**NOTE:** Run `make --help` for more information on all potential `make` targets
-
-More information can be found via the [Kubebuilder Documentation](https://book.kubebuilder.io/introduction.html)
-
+---
 
 ## License
 
@@ -437,10 +476,12 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+<http://www.apache.org/licenses/LICENSE-2.0>
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
+
+[Operator pattern]: https://kubernetes.io/docs/concepts/extend-kubernetes/operator/
