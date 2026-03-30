@@ -208,7 +208,7 @@ helm-manifests: _mkdir_build ## Render chart into a single operator.yaml (kubect
 		--namespace $(HELM_NAMESPACE) \
 		--set image.repository=$(IMAGE_REGISTRY)/$(IMAGE_NAME) \
 		--set image.tag=$(VERSION_SEMVER) \
-		| cat <(printf '\055--\napiVersion: v1\nkind: Namespace\nmetadata:\n  name: simple-cicd\n') - \
+		| { printf -- '---\napiVersion: v1\nkind: Namespace\nmetadata:\n  name: simple-cicd\n'; cat; } \
 		> bin/operator.yaml
 	@echo "Generated bin/operator.yaml"
 
