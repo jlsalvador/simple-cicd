@@ -71,6 +71,6 @@ ServiceAccount name.
 Operator image reference.
 */}}
 {{- define "simple-cicd.image" -}}
-{{- $tag := default .Chart.AppVersion .Values.image.tag }}
+{{- $tag := default (trimPrefix "v" .Chart.AppVersion) .Values.image.tag }}
 {{- printf "%s:%s" .Values.image.repository $tag }}
 {{- end }}
