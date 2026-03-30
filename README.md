@@ -28,7 +28,6 @@ helm upgrade --install \
 
 ```sh
 kubectl apply -f https://github.com/jlsalvador/simple-cicd/releases/latest/download/crds.yaml
-kubectl create ns simple-cicd
 kubectl apply -f https://github.com/jlsalvador/simple-cicd/releases/latest/download/operator.yaml
 ```
 

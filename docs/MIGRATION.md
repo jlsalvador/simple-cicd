@@ -101,9 +101,6 @@ changes introduced in `v1alpha2` of the Simple CI/CD CRDs.
    # Apply CRDs
    kubectl apply -f https://github.com/jlsalvador/simple-cicd/releases/latest/download/crds.yaml
 
-   # Create namespace
-   kubectl create ns simple-cicd
-
    # Apply the new operator (Deployment 'operator', ServiceAccount 'operator')
    kubectl apply -f https://github.com/jlsalvador/simple-cicd/releases/latest/download/operator.yaml
    ```
