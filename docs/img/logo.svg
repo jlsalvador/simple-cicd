@@ -27,15 +27,15 @@
      inkscape:deskcolor="#d1d1d1"
      inkscape:document-units="px"
      inkscape:export-bgcolor="#ffffff00"
-     inkscape:zoom="2"
-     inkscape:cx="156.75"
-     inkscape:cy="41.75"
+     inkscape:zoom="2.8284271"
+     inkscape:cx="110.30866"
+     inkscape:cy="75.130096"
      inkscape:window-width="2516"
      inkscape:window-height="1412"
      inkscape:window-x="0"
      inkscape:window-y="0"
      inkscape:window-maximized="1"
-     inkscape:current-layer="g3" />
+     inkscape:current-layer="g6" />
   <defs
      id="defs1">
     <clipPath
@@ -86,7 +86,7 @@
            transform="translate(4.1424727,4.801321)">
           <text
              xml:space="preserve"
-             style="font-weight:900;font-size:64px;font-family:'Noto Sans';-inkscape-font-specification:'Noto Sans Heavy';fill:#ffffff;stroke-width:2"
+             style="font-weight:900;font-size:64px;font-family:'Noto Sans';-inkscape-font-specification:'Noto Sans Heavy';fill:#ffffff;stroke-width:1;stroke:#ffffff;stroke-opacity:0.25;stroke-dasharray:none"
              x="82.429916"
              y="76.351997"
              id="text1"><tspan
@@ -94,7 +94,7 @@
                id="tspan1"
                x="82.429916"
                y="76.351997"
-               style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:64px;font-family:'Nimbus Sans';-inkscape-font-specification:'Nimbus Sans Bold';fill:#000000;fill-opacity:1">imple</tspan></text>
+               style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:64px;font-family:'Nimbus Sans';-inkscape-font-specification:'Nimbus Sans Bold';fill:#000000;fill-opacity:1;stroke:#ffffff;stroke-opacity:0.25;stroke-width:1;stroke-dasharray:none">imple</tspan></text>
           <g
              id="g5"
              transform="translate(-2.7062346,-113.45464)">
